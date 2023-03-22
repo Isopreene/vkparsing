@@ -305,7 +305,7 @@ class MySQLHandler:
 
 if __name__ == '__main__':
 
-    group_input = 'https://vk.com/slabzveno'
+    group_input = 'https://vk.com/respublicana'
     groupname = group_input.split("/")[-1] # в инпут #https://vk.com/slabzveno  https://vk.com/respublicana
     directory = '/Users/mirnauki/Downloads'  # в инпут?
     parser = MainMethods()
