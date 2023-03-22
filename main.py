@@ -169,7 +169,6 @@ class PostsHandler:
                 link = max(photo['sizes'], key=lambda x: x['height'] * x['width'])['url']
                 post_obj.add_attachment('photo', link)
             case 'video':
-                # print(attachment)
                 video = attachment['video']
                 link = f"https://vk.com/video{video['owner_id']}_{video['id']}"  # _{video['access_key']}
                 post_obj.add_attachment('video', link)
