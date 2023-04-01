@@ -5,48 +5,47 @@ import os
 import re
 import pymysql
 import json
-import vk_captchasolver as vc
-
+from twocaptcha import TwoCaptcha
 
 class MainMethods:
     """Основные методы для работы в программе"""
 
     @staticmethod
-    def get_param_from_url(url, param_name):
-        print(url)
-        return [i.split("=")[-1] for i in url.split("?", 1)[-1].split("&") if i.startswith(param_name + "=")][0]
+    def captcha_handler(captcha):
+        """Обрабатывает капчу"""
+        config = {
+            'server': 'rucaptcha.com',
+            'apiKey': '9b74cd2841f2e078d5e8e21cff3df6d8',
+            'defaultTimeout': 120,
+            'recaptchaTimeout': 600,
+            'pollingInterval': 10,
+        }
+        solver = TwoCaptcha(**config)
+        with open('captcha.jpg', 'wb') as file:
+            file.write(requests.get(captcha.get_url(), stream=True).content)
+        obj = solver.normal('captcha.jpg')
+        return captcha.try_again(obj['code']) # Просим вк попробовать еще раз вместе с решенной каптчей
 
-    def captcha_handler(self, captcha):
-        sid = self.get_param_from_url(captcha.get_url(), "sid")  # Парсим параметр sid из ссылки
-        s = self.get_param_from_url(captcha.get_url(), "s")  # Парсим параметр s из ссылки
-        return captcha.try_again(
-            vc.solve(sid=int(sid), s=int(s)))  # Просим вк попробовать еще раз вместе с решенной каптчей
-
-    def vk_login(self, group_input) -> dict | None:
+    def vk_login(self, group_input) -> dict | Exception:
         """логинится в vk, заходит в группу name и получает все посты"""
-        # must enter login and password through input, make it later
-        login = '+79963546774'
-        password = 'Kozzgsf0896'
-        token = 'vk1.a.DgiSODXfBYBhQf8wRMVEvzDLhSJjLnZlf_TJFfxI7oE9bzPsYNsYvy4tdIPc8ZchPOqNSAzzrzWv6rpBhnvSlXo_lDi2jf8M_A3ayCJNfzIQwGovZEPzYRlJjd4RkiOt1ZiATWo2DMrZBplTW4id1zjpNDt4-0JHLCX-fa-VzINsLOv7efCop_YMzGnN61G0GB2M2KmELgcfN-DwCD9vyw'
-        vk_session = vk_api.VkApi(login=login,
-                                  password=password,
-                                  token=token,
-                                  captcha_handler=self.captcha_handler)
-        vk_session.auth()
-        vk = vk_session.get_api()
-        id_ = re.search(r'vk.com/id(\d+)', group_input)
-        short_name = re.search(r'vk.com/(\w+)', group_input)
-        if id_:
-            posts = vk.wall.get(owner_id=-int(id_.group(1)), count=30,
-                                filter='all')  # dict, получаем все посты, count * 25 = их количество
-        elif short_name:
-            posts = vk.wall.get(domain=short_name.group(1), count=30,
-                                filter='all')  # dict, получаем все посты, count * 25 = их количество
-        else:
-            print(f'Неверно введён адрес или id сообщества')
-            return
-        return posts
-
+        try:
+            vk_session = vk_api.VkApi(token='fbd44e02fbd44e02fbd44e022ff8c62d19ffbd4fbd44e029807b26b8f927d40b91c66a9',
+                                      captcha_handler=self.captcha_handler)
+            #vk_session.auth()
+            vk = vk_session.get_api()
+            id_ = re.search('((public)|(club))(\d+)', group_input)
+            short_name = re.search('(\w+)', group_input)
+            if id_:
+                posts = vk.wall.get(owner_id=-int(id_.group(4)), count=100,
+                                    filter='all')  # dict, получаем все посты, count * 25 = их количество
+            elif short_name:
+                posts = vk.wall.get(domain=short_name.group(1), count=100,
+                                    filter='all')  # dict, получаем все посты, count * 25 = их количество
+            else:
+                raise TypeError('Неверно введён адрес или id сообщества')
+            return posts
+        except Exception as e:
+            return e
     @staticmethod
     def create_group(directory, groupname):
         try:
@@ -60,12 +59,13 @@ class MainMethods:
         return directory
 
     @staticmethod
-    def create_json(groupname, data):
+    def create_json(groupname, data): #не нужен, работает без него
         with open(f'{groupname}.json', 'w') as file:
+            file.write('[')
             for row in data:
                 json.dump(row, file, indent=4, default=str, ensure_ascii=False)
-                file.write('\n')
-
+                file.write(',\n')
+            file.write(']')
 
 class Post:
     """каждый пост с атрибутами вложений (текста, картинок, видео, документов и т.д.)"""
@@ -204,7 +204,7 @@ class PostsHandler:
 
             new_post = Post()
             new_post.hash = post['hash']
-            new_post.date = datetime.fromtimestamp(post['date']).strftime('%Y-%m-%d')
+            new_post.date = datetime.fromtimestamp(post['date']).strftime('%Y-%m-%d %H:%M:%S')
 
             if post.get('copy_history'):  # если репост
                 new_post.is_repost = True
@@ -223,7 +223,7 @@ class PostsHandler:
 
 class MySQLHandler:
 
-    def __init__(self, data_from_post_handler):
+    def __init__(self, data_from_post_handler=None):
         """Получает данные в виде списка объектов класса Post и заносит их в базу данных. Проверяет на хэши, если такой уже есть в БД, то не заносит"""
         self.__posts = data_from_post_handler
 
@@ -248,10 +248,10 @@ class MySQLHandler:
                     cursor.execute('show tables')
                     if (groupname,) not in cursor:
                         query = f'create table {groupname}(id INT PRIMARY KEY AUTO_INCREMENT, post_hash varchar(255), ' \
-                                'post_text varchar(255), post_date date, post_id varchar(255), is_repost bool, attachment_1 varchar(255), ' \
-                                'attachment_2 varchar(255), attachment_3 varchar(255), attachment_4 varchar(255), ' \
-                                'attachment_5 varchar(255), attachment_6 varchar(255), attachment_7 varchar(255), ' \
-                                'attachment_8 varchar(255), attachment_9 varchar(255), attachment_10 varchar(255))'  # создали таблицу с нужными данными
+                                'post_text varchar(255), post_date datetime, post_id varchar(255), is_repost bool, attachment_1 TEXT(65535), ' \
+                                'attachment_2 TEXT(65535), attachment_3 TEXT(65535), attachment_4 TEXT(65535), ' \
+                                'attachment_5 TEXT(65535), attachment_6 TEXT(65535), attachment_7 TEXT(65535), ' \
+                                'attachment_8 TEXT(65535), attachment_9 TEXT(65535), attachment_10 TEXT(65535))'  # создали таблицу с нужными данными
                         cursor.execute(query)
         except Exception as e:
             raise e
@@ -283,41 +283,79 @@ class MySQLHandler:
                                     query = f"update {groupname} set {column_name} = (%s) where post_hash = %s"
                                     cursor.execute(query, [attachment_name, check_hash])
                             connection.commit()
-
         except Exception as e:
             raise e
 
     @staticmethod
-    def get_from_database(host, user, password, database, groupname):
+    def get_from_database(host, user, password, database, table):
         try:
             with pymysql.connect(host=host, user=user, password=password, database=database) as connection:
                 with connection.cursor() as cursor:
-                    query = f'select * from {groupname} where id <= 100'
+                    query = f'select post_text, post_date, post_id, is_repost, attachment_1, attachment_2, attachment_3, attachment_4, attachment_5, attachment_6, attachment_7, attachment_8, attachment_9, attachment_10 ' \
+                            f'from {table} ' \
+                            f'where id <= 100 ' \
+                            f'order by post_date desc'
                     cursor.execute(query)
                     data = cursor.fetchall()
-                    query = f'SHOW COLUMNS FROM {groupname}'
+                    query = f'SHOW COLUMNS FROM {table}'
                     cursor.execute(query)
-                    columns = tuple(map(lambda x: x[0], cursor.fetchall()))
-                    return ({key: value for key, value in zip(columns, row) if value} for row in data)
+                    columns = ('Текст', 'Дата', 'ID', 'Репост', 'Вложение 1', 'Вложение 2', 'Вложение 3', 'Вложение 4',
+                                    'Вложение 5', 'Вложение 6', 'Вложение 7', 'Вложение 8', 'Вложение 9', 'Вложение 10')
+                    return list({key: value for key, value in zip(columns, row) if value} for row in data)
         except Exception as e:
             raise e
 
+    @staticmethod
+    def get_tablenames(host, user, password, database):
+        try:
+            with pymysql.connect(host=host, user=user, password=password, database=database) as connection:
+                with connection.cursor() as cursor:
+                    query = f'show tables'
+                    cursor.execute(query)
+                    names = list(map(lambda x: x[0], cursor.fetchall()))
+                return names
+        except Exception as e:
+            raise e
 
-if __name__ == '__main__':
+class Runners:
+    @staticmethod
+    def start_all():
+        vk_sql = MySQLHandler()
+        arguments = {'host': 'localhost', 'user': 'root',
+                     'password': '12august'}  # добавить инпуты вместо логина и пароля
+        groups = vk_sql.get_tablenames(**arguments, database='vk')
+        data = ({group: vk_sql.get_from_database(**arguments, database='vk', table=group)} for group in groups)
+        return data
 
-    group_input = 'https://vk.com/respublicana'
-    groupname = group_input.split("/")[-1] # в инпут #https://vk.com/slabzveno  https://vk.com/respublicana
-    directory = '/Users/mirnauki/Downloads'  # в инпут?
-    parser = MainMethods()
-    collected_data = parser.vk_login(group_input)
-    path_to_group = parser.create_group(directory, groupname)
-    data_processing = PostsHandler(collected_data)
-    data_processing.main(path_to_group)
-    posts = data_processing.processed_posts
-    vk_sql = MySQLHandler(posts)
-    arguments = {'host': 'localhost', 'user': 'root', 'password': '12august'}  # добавить инпуты вместо логина и пароля
-    vk_sql.create_database(**arguments)
-    vk_sql.create_table(**arguments, database='vk', groupname=groupname)
-    vk_sql.add_to_database(**arguments, database='vk', groupname=groupname)
-    data = vk_sql.get_from_database(**arguments, database='vk', groupname=groupname)
-    parser.create_json(path_to_group, data)
+    @staticmethod
+    def start_group(*groups):
+        vk_sql = MySQLHandler()
+        arguments = {'host': 'localhost', 'user': 'root',
+                     'password': '12august'}  # добавить инпуты вместо логина и пароля
+        tables = vk_sql.get_tablenames(**arguments, database='vk')
+        data = list()
+        for group in groups:
+            if group in tables:
+                group_data = vk_sql.get_from_database(**arguments, database='vk', table=group)
+                data.append({group: group_data})
+            else:
+                directory = '/Users/mirnauki/Downloads'  # в инпут?
+                parser = MainMethods()
+                collected_data = parser.vk_login(group)
+                if isinstance(collected_data, Exception):
+                    data.append({group: f'Доступ к группе {group} закрыт, невозможно получить данные'})
+                else:
+                    path_to_group = parser.create_group(directory, group)
+                    data_processing = PostsHandler(collected_data)
+                    data_processing.main(path_to_group)
+                    posts = data_processing.processed_posts
+                    vk_sql = MySQLHandler(posts)
+                    vk_sql.create_database(**arguments)
+                    vk_sql.create_table(**arguments, database='vk', groupname=group)
+                    vk_sql.add_to_database(**arguments, database='vk', groupname=group)
+                    group_data = vk_sql.get_from_database(**arguments, database='vk',table=group)
+                    data.append({group: group_data})
+        return data
+
+# data = Runners.start_group(*['teplomult'])
+# print(data)
