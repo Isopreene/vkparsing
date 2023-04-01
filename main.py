@@ -356,6 +356,3 @@ class Runners:
                     group_data = vk_sql.get_from_database(**arguments, database='vk',table=group)
                     data.append({group: group_data})
         return data
-
-# data = Runners.start_group(*['teplomult'])
-# print(data)
