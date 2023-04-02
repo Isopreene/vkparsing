@@ -1,11 +1,13 @@
-import vk_api
-import requests
-from datetime import datetime
+import json
 import os
 import re
+from datetime import datetime, timedelta, date
+
 import pymysql
-import json
+import requests
+import vk_api
 from twocaptcha import TwoCaptcha
+
 
 class MainMethods:
     """Основные методы для работы в программе"""
@@ -24,17 +26,17 @@ class MainMethods:
         with open('captcha.jpg', 'wb') as file:
             file.write(requests.get(captcha.get_url(), stream=True).content)
         obj = solver.normal('captcha.jpg')
-        return captcha.try_again(obj['code']) # Просим вк попробовать еще раз вместе с решенной каптчей
+        return captcha.try_again(obj['code'])  # Просим вк попробовать еще раз вместе с решенной каптчей
 
     def vk_login(self, group_input) -> dict | Exception:
         """логинится в vk, заходит в группу name и получает все посты"""
         try:
             vk_session = vk_api.VkApi(token='fbd44e02fbd44e02fbd44e022ff8c62d19ffbd4fbd44e029807b26b8f927d40b91c66a9',
                                       captcha_handler=self.captcha_handler)
-            #vk_session.auth()
+            # vk_session.auth()
             vk = vk_session.get_api()
-            id_ = re.search('((public)|(club))(\d+)', group_input)
-            short_name = re.search('(\w+)', group_input)
+            id_ = re.search(r'((public)|(club))(\d+)', group_input)
+            short_name = re.search(r'(\w+)', group_input)
             if id_:
                 posts = vk.wall.get(owner_id=-int(id_.group(4)), count=100,
                                     filter='all')  # dict, получаем все посты, count * 25 = их количество
@@ -46,6 +48,7 @@ class MainMethods:
             return posts
         except Exception as e:
             return e
+
     @staticmethod
     def create_group(directory, groupname):
         try:
@@ -59,13 +62,14 @@ class MainMethods:
         return directory
 
     @staticmethod
-    def create_json(groupname, data): #не нужен, работает без него
+    def create_json(groupname, data):  # не нужен, работает без него
         with open(f'{groupname}.json', 'w') as file:
             file.write('[')
             for row in data:
                 json.dump(row, file, indent=4, default=str, ensure_ascii=False)
                 file.write(',\n')
             file.write(']')
+
 
 class Post:
     """каждый пост с атрибутами вложений (текста, картинок, видео, документов и т.д.)"""
@@ -193,7 +197,8 @@ class PostsHandler:
                 photo = attachment['photo']
                 link = max(photo['sizes'], key=lambda x: x['height'] * x['width'])['url']
                 response = requests.get(link)
-                pattern = max(re.search(r'uniq_tag=(-?\w+)-?(\w+)?-?(\w+)?&?', response.url).groups(), key=lambda x: len(x) if x else 0)[:10]
+                pattern = max(re.search(r'uniq_tag=(-?\w+)-?(\w+)?-?(\w+)?&?', response.url).groups(),
+                              key=lambda x: len(x) if x else 0)[:10]
                 filename = f"{pattern}.jpg"
                 if not os.path.exists(f'{directory}/{filename}'):
                     with open(f'{directory}/{filename}', 'wb') as file:
@@ -273,7 +278,8 @@ class MySQLHandler:
                             is_repost = post.is_repost
                             attachments = post.attachments
                             query = f'insert into {groupname}(post_hash, post_text, post_date, post_id, is_repost) values (%s, %s, %s, %s, %s)'
-                            cursor.execute(query, (check_hash, text, date, id_, is_repost))  # внесли текст поста, id создателя, дату поста и метку репоста (является/не является)
+                            cursor.execute(query, (check_hash, text, date, id_,
+                                                   is_repost))  # внесли текст поста, id создателя, дату поста и метку репоста (является/не является)
                             counter = 0
                             for attachment_type, attachment_list in [i for i in attachments.items() if i[1]]:
                                 for attachment in attachment_list:
@@ -287,20 +293,24 @@ class MySQLHandler:
             raise e
 
     @staticmethod
-    def get_from_database(host, user, password, database, table):
+    def get_from_database(host, user, password, database, table, date_start, date_finish):
+        if not date_start:
+            date_start = date(year=1, month=1, day=1)
+        if not date_finish:
+            date_finish = datetime.now()
         try:
             with pymysql.connect(host=host, user=user, password=password, database=database) as connection:
                 with connection.cursor() as cursor:
                     query = f'select post_text, post_date, post_id, is_repost, attachment_1, attachment_2, attachment_3, attachment_4, attachment_5, attachment_6, attachment_7, attachment_8, attachment_9, attachment_10 ' \
                             f'from {table} ' \
-                            f'where id <= 100 ' \
+                            f'where date(post_date) >= %s and date(post_date) <= %s ' \
                             f'order by post_date desc'
-                    cursor.execute(query)
+                    cursor.execute(query, (date_start, date_finish))
                     data = cursor.fetchall()
                     query = f'SHOW COLUMNS FROM {table}'
                     cursor.execute(query)
                     columns = ('Текст', 'Дата', 'ID', 'Репост', 'Вложение 1', 'Вложение 2', 'Вложение 3', 'Вложение 4',
-                                    'Вложение 5', 'Вложение 6', 'Вложение 7', 'Вложение 8', 'Вложение 9', 'Вложение 10')
+                               'Вложение 5', 'Вложение 6', 'Вложение 7', 'Вложение 8', 'Вложение 9', 'Вложение 10')
                     return list({key: value for key, value in zip(columns, row) if value} for row in data)
         except Exception as e:
             raise e
@@ -317,30 +327,42 @@ class MySQLHandler:
         except Exception as e:
             raise e
 
+
 class Runners:
+
     @staticmethod
-    def start_all():
+    def start_all(date_start=None, date_finish=None):
         vk_sql = MySQLHandler()
         arguments = {'host': 'localhost', 'user': 'root',
                      'password': '12august'}  # добавить инпуты вместо логина и пароля
         groups = vk_sql.get_tablenames(**arguments, database='vk')
-        data = ({group: vk_sql.get_from_database(**arguments, database='vk', table=group)} for group in groups)
+        data = list({group: vk_sql.get_from_database(**arguments, database='vk', table=group,
+                                                     date_start=date_start, date_finish=date_finish)} for group in
+                    groups)
         return data
 
     @staticmethod
-    def start_group(*groups):
+    def start_group(*groups_to_check, date_start=None, date_finish=None):
         vk_sql = MySQLHandler()
         arguments = {'host': 'localhost', 'user': 'root',
-                     'password': '12august'}  # добавить инпуты вместо логина и пароля
-        tables = vk_sql.get_tablenames(**arguments, database='vk')
+                     'password': '12august'}  # при переносе на сервер поменять хост, юзера и пароль
         data = list()
-        for group in groups:
-            if group in tables:
-                group_data = vk_sql.get_from_database(**arguments, database='vk', table=group)
+        directory = '/Users/mirnauki/Downloads'  # в инпут?
+        parser = MainMethods()
+        date_to_check = datetime(year=1, month=1, day=1)
+        group_data = None
+        for group in groups_to_check:
+            try:
+                group_data = vk_sql.get_from_database(**arguments, database='vk', table=group,
+                                                      date_start=date_start, date_finish=date_finish)
+                date_to_check = (group_data[0]['Дата'])
+            except pymysql.err.ProgrammingError:
+                pass
+            except IndexError:
+                pass
+            if datetime.now() - date_to_check < timedelta(hours=1):  # Если дата самого последнего поста по дате, хранящегося в БД, меньше текущей на 1 час – обновляем посты
                 data.append({group: group_data})
             else:
-                directory = '/Users/mirnauki/Downloads'  # в инпут?
-                parser = MainMethods()
                 collected_data = parser.vk_login(group)
                 if isinstance(collected_data, Exception):
                     data.append({group: f'Доступ к группе {group} закрыт, невозможно получить данные'})
@@ -353,6 +375,12 @@ class Runners:
                     vk_sql.create_database(**arguments)
                     vk_sql.create_table(**arguments, database='vk', groupname=group)
                     vk_sql.add_to_database(**arguments, database='vk', groupname=group)
-                    group_data = vk_sql.get_from_database(**arguments, database='vk',table=group)
+                    group_data = vk_sql.get_from_database(**arguments, database='vk', table=group,
+                                                          date_start=date_start, date_finish=date_finish)[:100]
                     data.append({group: group_data})
         return data
+
+
+# data = Runners.start_group('animatron', date_start='2023-03-19', date_finish='2023-03-22')
+# to_print = list(map(lambda x: x['Дата'], data[0]['animatron']))
+# print(to_print)
