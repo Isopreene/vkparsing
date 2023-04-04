@@ -349,7 +349,7 @@ class Runners:
     def start_group(*groups_to_check, date_start=None, date_finish=None):
         vk_sql = MySQLHandler()
         arguments = {'host': 'localhost', 'user': 'root',
-                     'password': '12august'}  # при переносе на сервер поменять хост, юзера и пароль
+                     'password': 'root'}  # при переносе на сервер поменять хост, юзера и пароль
         data = list()
         directory = '/Users/mirnauki/Downloads'  # в инпут?
         parser = MainMethods()
