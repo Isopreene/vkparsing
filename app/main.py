@@ -2,11 +2,39 @@ import json
 import os
 import re
 from datetime import datetime, timedelta, date
-
+from time import perf_counter
 import pymysql
+from pymysql.constants import CLIENT
 import requests
 import vk_api
 from twocaptcha import TwoCaptcha
+from functools import wraps
+
+arguments = {'host': '37.140.192.188', 'port': 3306, 'user': 'u2003667_vk',
+             'password': '1T4zDELcUYa6h7yb', 'database': 'u2003667_default', "client_flag": CLIENT.MULTI_STATEMENTS}  # данные сервера на хостинге
+directory = '/var/www/u1234567/data//www/vkparser.site' # поменять
+
+
+class MeasureTime:
+    def __init__(self, cls):
+        self.cls = cls
+
+    def __call__(self, *args, **kwargs):
+        return self.cls(*args, **kwargs)
+
+    def __getattribute__(self, name):
+        attr = super().__getattribute__(name)
+        if callable(attr):
+            @wraps(attr)
+            def wrapped(*args, **kwargs):
+                start_time = perf_counter()
+                result = attr(*args, **kwargs)
+                end_time = perf_counter()
+                print(f"Time taken to execute {attr.__name__}: {end_time - start_time} seconds")
+                return result
+
+            return wrapped
+        return attr
 
 
 class MainMethods:
@@ -28,15 +56,14 @@ class MainMethods:
         obj = solver.normal('captcha.jpg')
         return captcha.try_again(obj['code'])  # Просим вк попробовать еще раз вместе с решенной каптчей
 
-    def vk_login(self, group_input) -> dict | Exception:
-        """логинится в vk, заходит в группу name и получает все посты"""
+    def vk_login(self, groupname) -> dict | Exception:
+        """логинится в vk, заходит в группу groupname и получает все посты в виде словаря"""
         try:
             vk_session = vk_api.VkApi(token='fbd44e02fbd44e02fbd44e022ff8c62d19ffbd4fbd44e029807b26b8f927d40b91c66a9',
                                       captcha_handler=self.captcha_handler)
-            # vk_session.auth()
             vk = vk_session.get_api()
-            id_ = re.search(r'((public)|(club))(\d+)', group_input)
-            short_name = re.search(r'(\w+)', group_input)
+            id_ = re.search(r'((public)|(club))(\d+)', groupname)
+            short_name = re.search(r'(\w+)', groupname)
             if id_:
                 posts = vk.wall.get(owner_id=-int(id_.group(4)), count=100,
                                     filter='all')  # dict, получаем все посты, count * 25 = их количество
@@ -51,6 +78,7 @@ class MainMethods:
 
     @staticmethod
     def create_group(directory, groupname):
+        """Создаёт папку с именем группы groupname в корне программы"""
         try:
             if not os.path.exists(f'{directory}/files'):
                 os.mkdir(f'{directory}/files')
@@ -63,6 +91,7 @@ class MainMethods:
 
     @staticmethod
     def create_json(groupname, data):  # не нужен, работает без него
+        """Создаёт json-файл и загружает его в корень папки с картинками. На данный момент не используется"""
         with open(f'{groupname}.json', 'w') as file:
             file.write('[')
             for row in data:
@@ -72,9 +101,9 @@ class MainMethods:
 
 
 class Post:
-    """каждый пост с атрибутами вложений (текста, картинок, видео, документов и т.д.)"""
 
     def __init__(self):
+        """Превращает пост в объект класса Post с атрибутами вложений, id, текста, даты, отметки 'Является репостом', хэша"""
         self.__text = None
         self.__date = None
         self.__id_ = None
@@ -84,41 +113,51 @@ class Post:
 
     @property
     def text(self):
+        """Геттер для __text"""
         return self.__text
 
     @text.setter
     def text(self, obj):
+        """Сеттер для __text"""
         self.__text = obj
 
     @property
     def date(self):
+        """Геттер для __date"""
         return self.__date
 
     @date.setter
     def date(self, obj):
+        """Сеттер для __date"""
         self.__date = obj
 
     @property
     def id_(self):
+        """Геттер для __id"""
         return self.__id_
 
     @id_.setter
     def id_(self, obj):
+        """Сеттер для __id"""
         self.__id_ = obj
 
     @property
     def attachments(self):
+        """Геттер для списка __attachments"""
         return self.__attachments
 
     def add_attachment(self, type_, obj):
+        """Сеттер для списка __attachments"""
         self.__attachments[type_].append(obj)
 
     @property
     def hash(self):
+        """Геттер для __hash"""
         return self.__hash
 
     @hash.setter
     def hash(self, obj):
+        """Сеттер для __hash"""
         if self.hash is None:
             self.__hash = obj
         else:
@@ -126,14 +165,17 @@ class Post:
 
     @property
     def is_repost(self):
+        """Геттер для __is_repost"""
         return self.__is_repost
 
     @is_repost.setter
     def is_repost(self, obj):
+        """Сеттер для __is_repost"""
         self.__is_repost = obj
 
     @staticmethod
     def get_poll(poll):
+        """Обрабатывает опрос, находящийся во вложении. Возвращает словарь со всем содержимым опроса"""
         poll_image = poll.get('photo')
         if poll_image:
             poll_image_url = max(poll_image['images'], key=lambda x: x['width'] * x['height'])['url']
@@ -147,26 +189,30 @@ class Post:
 
 
 class PostsHandler:
-    """обрабатывает dict всех постов, создаёт каждому посту объект класса Post и присваивает ему атрибуты для записи"""
 
     def __init__(self, data_from_parser):
-
+        """обрабатывает dict всех постов, создаёт каждому посту объект класса Post и присваивает ему атрибуты для записи"""
         self.__data = data_from_parser
         self.__processed_posts = []  # список объектов класса Post, добавляем уже обработанные посты
 
     @property
     def data(self):
+        """Геттер для __data"""
         return self.__data
 
     @property
     def processed_posts(self):
+        """Геттер для списка __processed_posts"""
         return self.__processed_posts
 
     def add_processed_post(self, post):
+        """Сеттер для списка __processed_posts"""
         self.__processed_posts.append(post)
 
     @staticmethod
     def add_attachment(attachment, post_obj):
+        """Добавляет к атрибуту __attachments объекта класса Post вложения.
+        Иными словами, формирует список вложений к посту"""
         match attachment.get('type'):
             case 'photo':
                 photo = attachment['photo']
@@ -189,11 +235,10 @@ class PostsHandler:
             case 'poll':  # опрос – от 0 до 1
                 poll = attachment['poll']
                 post_obj.add_attachment('doc', post_obj.get_poll(poll))
-            case _:
-                return
 
     @staticmethod
     def download_photo(attachment, directory):
+        """Скачивает фото поста в папку directory"""
         match attachment.get('type'):
             case 'photo':
                 photo = attachment['photo']
@@ -205,12 +250,10 @@ class PostsHandler:
                 if not os.path.exists(f'{directory}/{filename}'):
                     with open(f'{directory}/{filename}', 'wb') as file:
                         file.write(response.content)
-            case _:
-                return
 
     def main(self, dir_to_group):
+        """Проходит по списку постов, полученному из парсера, и создаёт объекты класса Post, занося их в список PostHandler().__processed_post"""
         for post in self.data['items']:  # проходимся по dict и получаем list
-
             new_post = Post()
             new_post.hash = post['hash']
             new_post.date = datetime.fromtimestamp(post['date']).strftime('%Y-%m-%d %H:%M:%S')
@@ -222,11 +265,9 @@ class PostsHandler:
             new_post.text = post['text']
             new_post.id_ = post['owner_id']
             attachments = post['attachments']
-
             for attachment in attachments:
                 self.add_attachment(attachment, new_post)
-                self.download_photo(attachment, dir_to_group)
-
+                #self.download_photo(attachment, dir_to_group)
             self.add_processed_post(new_post)
 
 
@@ -237,10 +278,10 @@ class MySQLHandler:
         self.__posts = data_from_post_handler
 
     @staticmethod
-    def create_database(host, user, password):
-        """создать базу данных, куда будем записывать всё"""
+    def create_database(host, user, password, port, client_flag):
+        """создаёт` базу данных, куда будем записывать всё"""
         try:
-            with pymysql.connect(host=host, user=user, password=password) as connection:
+            with pymysql.connect(host=host, user=user, password=password, port=port, client_flag=client_flag) as connection:
                 with connection.cursor() as cursor:
                     cursor.execute('show databases')
                     if ('vk',) not in cursor:
@@ -249,10 +290,10 @@ class MySQLHandler:
             raise e
 
     @staticmethod
-    def create_table(host, user, password, database, groupname):
-        """Работаем с базой данных vk"""
+    def create_table(host, user, password, database, groupname, port, client_flag):
+        """Создаёт таблицу с именем groupname в базе данных database, если её там ещё нет"""
         try:
-            with pymysql.connect(host=host, user=user, password=password, database=database) as connection:
+            with pymysql.connect(host=host, user=user, password=password, port=port, database=database, client_flag=client_flag) as connection:
                 with connection.cursor() as cursor:
                     cursor.execute('show tables')
                     if (groupname,) not in cursor:
@@ -265,9 +306,10 @@ class MySQLHandler:
         except Exception as e:
             raise e
 
-    def add_to_database(self, host, user, password, database, groupname):
+    def add_to_database(self, host, user, password, database, port, groupname, client_flag):
+        """добавить объекты класса Post в существующую таблицу в бд, если их там ещё нет"""
         try:
-            with pymysql.connect(host=host, user=user, password=password, database=database) as connection:
+            with pymysql.connect(host=host, user=user, password=password, port=port, database=database, client_flag=client_flag) as connection:
                 with connection.cursor() as cursor:
                     for post in self.__posts:
                         check_hash = post.hash
@@ -297,21 +339,23 @@ class MySQLHandler:
             raise e
 
     @staticmethod
-    def get_from_database(host, user, password, database, table, date_start, date_finish):
+    def get_from_database(host, user, password, database, port, groupname, date_start, date_finish, client_flag):
+        """Получает данные из дб database, таблицы groupname, с указанием даты старта date_start и даты финиша date_finish"""
         if not date_start:
             date_start = date(year=1, month=1, day=1)
         if not date_finish:
             date_finish = datetime.now()
         try:
-            with pymysql.connect(host=host, user=user, password=password, database=database) as connection:
+            with pymysql.connect(host=host, user=user, password=password, database=database, port=port, client_flag=client_flag) as connection:
                 with connection.cursor() as cursor:
-                    query = f'select post_text, post_date, post_id, is_repost, attachment_1, attachment_2, attachment_3, attachment_4, attachment_5, attachment_6, attachment_7, attachment_8, attachment_9, attachment_10 ' \
-                            f'from {table} ' \
-                            f'where date(post_date) >= %s and date(post_date) <= %s ' \
-                            f'order by post_date desc'
+                    query = f"select post_text, post_date, post_id, is_repost, attachment_1, attachment_2, attachment_3, " \
+                            "attachment_4, attachment_5, attachment_6, attachment_7, attachment_8, attachment_9, attachment_10 " \
+                            f"from {groupname} " \
+                            "where date(post_date) >= %s and date(post_date) <= %s " \
+                            "order by post_date desc"
                     cursor.execute(query, (date_start, date_finish))
                     data = cursor.fetchall()
-                    query = f'SHOW COLUMNS FROM {table}'
+                    query = f'SHOW COLUMNS FROM {groupname}'
                     cursor.execute(query)
                     columns = ('Текст', 'Дата', 'ID', 'Репост', 'Вложение 1', 'Вложение 2', 'Вложение 3', 'Вложение 4',
                                'Вложение 5', 'Вложение 6', 'Вложение 7', 'Вложение 8', 'Вложение 9', 'Вложение 10')
@@ -320,9 +364,10 @@ class MySQLHandler:
             raise e
 
     @staticmethod
-    def get_tablenames(host, user, password, database):
+    def get_tablenames(host, user, password, database, port, client_flag):
+        """Получает имена таблиц (групп), уже существующих в бд database"""
         try:
-            with pymysql.connect(host=host, user=user, password=password, database=database) as connection:
+            with pymysql.connect(host=host, user=user, password=password, database=database, port=port, client_flag=client_flag) as connection:
                 with connection.cursor() as cursor:
                     query = f'show tables'
                     cursor.execute(query)
@@ -336,55 +381,49 @@ class Runners:
 
     @staticmethod
     def start_all(date_start=None, date_finish=None):
+        """При отправке запроса all или без указания групп"""
         vk_sql = MySQLHandler()
-        arguments = {'host': 'localhost', 'user': 'root',
-                     'password': '12august'}  # добавить инпуты вместо логина и пароля
-        groups = vk_sql.get_tablenames(**arguments, database='vk')
-        data = list({group: vk_sql.get_from_database(**arguments, database='vk', table=group,
-                                                     date_start=date_start, date_finish=date_finish)} for group in
-                    groups)
+        groups = vk_sql.get_tablenames(**arguments)
+        data = list({group: vk_sql.get_from_database(**arguments, groupname=group,
+                                                     date_start=date_start, date_finish=date_finish)}
+                    for group in groups)
         return data
 
     @staticmethod
     def start_group(*groups_to_check, date_start=None, date_finish=None):
+        """При отправке запроса с указанием групп"""
         vk_sql = MySQLHandler()
-        arguments = {'host': 'localhost', 'user': 'root',
-                     'password': 'root'}  # при переносе на сервер поменять хост, юзера и пароль
         data = list()
-        directory = '/Users/mirnauki/Downloads'  # в инпут?
         parser = MainMethods()
-        date_to_check = datetime(year=1, month=1, day=1)
-        group_data = None
         for group in groups_to_check:
             try:
-                group_data = vk_sql.get_from_database(**arguments, database='vk', table=group,
+                group_data = vk_sql.get_from_database(**arguments, groupname=group,
                                                       date_start=date_start, date_finish=date_finish)
                 date_to_check = (group_data[0]['Дата'])
             except pymysql.err.ProgrammingError:
                 pass
             except IndexError:
                 pass
-            if datetime.now() - date_to_check < timedelta(hours=1):  # Если дата самого последнего поста по дате, хранящегося в БД, меньше текущей на 1 час – обновляем посты
-                data.append({group: group_data})
+            collected_data = parser.vk_login(groupname=group)
+            if isinstance(collected_data, Exception):
+                data.append({group: f'Доступ к группе {group} закрыт, невозможно получить данные'})
             else:
-                collected_data = parser.vk_login(group)
-                if isinstance(collected_data, Exception):
-                    data.append({group: f'Доступ к группе {group} закрыт, невозможно получить данные'})
-                else:
-                    path_to_group = parser.create_group(directory, group)
-                    data_processing = PostsHandler(collected_data)
-                    data_processing.main(path_to_group)
-                    posts = data_processing.processed_posts
-                    vk_sql = MySQLHandler(posts)
-                    vk_sql.create_database(**arguments)
-                    vk_sql.create_table(**arguments, database='vk', groupname=group)
-                    vk_sql.add_to_database(**arguments, database='vk', groupname=group)
-                    group_data = vk_sql.get_from_database(**arguments, database='vk', table=group,
-                                                          date_start=date_start, date_finish=date_finish)[:100]
-                    data.append({group: group_data})
+                path_to_group = parser.create_group(directory, group)
+                data_processing = PostsHandler(collected_data)
+                data_processing.main(path_to_group)
+                posts = data_processing.processed_posts
+                vk_sql = MySQLHandler(posts)
+                #vk_sql.create_database(**arguments)
+                vk_sql.create_table(**arguments, groupname=group)
+                vk_sql.add_to_database(**arguments, groupname=group)
+                group_data = vk_sql.get_from_database(**arguments, groupname=group, date_start=date_start, date_finish=date_finish)[:100]
+                data.append({group: group_data})
         return data
 
 
-# data = Runners.start_group('animatron', date_start='2023-03-19', date_finish='2023-03-22')
-# to_print = list(map(lambda x: x['Дата'], data[0]['animatron']))
-# print(to_print)
+@MeasureTime
+def start():
+    Runners().start_group('animatron', date_start='2023-03-19', date_finish='2023-03-22')
+
+#print(MySQLHandler().get_tablenames(**arguments))
+#start()
