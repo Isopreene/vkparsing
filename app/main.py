@@ -189,6 +189,8 @@ class PostsHandler:
             case 'poll':  # опрос – от 0 до 1
                 poll = attachment['poll']
                 post_obj.add_attachment('doc', post_obj.get_poll(poll))
+            case _:
+                return
 
     @staticmethod
     def download_photo(attachment, directory):
@@ -203,6 +205,8 @@ class PostsHandler:
                 if not os.path.exists(f'{directory}/{filename}'):
                     with open(f'{directory}/{filename}', 'wb') as file:
                         file.write(response.content)
+            case _:
+                return
 
     def main(self, dir_to_group):
         for post in self.data['items']:  # проходимся по dict и получаем list
