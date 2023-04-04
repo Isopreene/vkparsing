@@ -20,7 +20,7 @@ def get_groups_by_get_requests():
         data = main.Runners.start_group(*groups, date_start=date_start, date_finish=date_finish)
         return data
     else:
-        return f'Привет! Это парсер для групп vk.com. Пошлите get-запрос вида domain.com/?params или domain.com/params. \n\nСписок доступных параметров: groups=(через запятую), all=(True/False), date_start=(YYYY-MM-DD), date_finish=(YYYY-MM-DD)'
+        return render_template('index.html', host=request.host)
 
 @app.route('/all')
 def get_all_groups():
@@ -28,5 +28,5 @@ def get_all_groups():
     data = main.Runners.start_all()
     return data
 
-
-app.run()
+if __name__ == '__main__':
+    app.run(debug=True)
