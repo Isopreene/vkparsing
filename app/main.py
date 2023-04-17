@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from datetime import datetime, timedelta, date
+from datetime import datetime, date
 from time import perf_counter
 import pymysql
 from pymysql.constants import CLIENT
@@ -10,9 +10,11 @@ import vk_api
 from twocaptcha import TwoCaptcha
 from functools import wraps
 
+
 arguments = {'host': '37.140.192.188', 'port': 3306, 'user': 'u2003667_vk',
-             'password': '1T4zDELcUYa6h7yb', 'database': 'u2003667_default', "client_flag": CLIENT.MULTI_STATEMENTS}  # данные сервера на хостинге
-directory = '/var/www/u1234567/data//www/vkparser.site' # поменять
+             'password': '1T4zDELcUYa6h7yb', 'database': 'u2003667_default',
+             "client_flag": CLIENT.MULTI_STATEMENTS}  # данные сервера на хостинге
+directory = "/var/www/u1234567/data//www/vkparser.site"  # поменять
 
 
 class MeasureTime:
@@ -177,6 +179,7 @@ class Post:
     def get_poll(poll):
         """Обрабатывает опрос, находящийся во вложении. Возвращает словарь со всем содержимым опроса"""
         poll_image = poll.get('photo')
+        poll_image_url = None
         if poll_image:
             poll_image_url = max(poll_image['images'], key=lambda x: x['width'] * x['height'])['url']
         votes = []
@@ -320,11 +323,11 @@ class MySQLHandler:
                         else:
                             text = post.text[:252] + '...' if len(post.text) >= 252 else post.text
                             id_ = post.id_
-                            date = post.date
+                            date_ = post.date
                             is_repost = post.is_repost
                             attachments = post.attachments
                             query = f'insert into {groupname}(post_hash, post_text, post_date, post_id, is_repost) values (%s, %s, %s, %s, %s)'
-                            cursor.execute(query, (check_hash, text, date, id_,
+                            cursor.execute(query, (check_hash, text, date_, id_,
                                                    is_repost))  # внесли текст поста, id создателя, дату поста и метку репоста (является/не является)
                             counter = 0
                             for attachment_type, attachment_list in [i for i in attachments.items() if i[1]]:
@@ -399,7 +402,6 @@ class Runners:
             try:
                 group_data = vk_sql.get_from_database(**arguments, groupname=group,
                                                       date_start=date_start, date_finish=date_finish)
-                date_to_check = (group_data[0]['Дата'])
             except pymysql.err.ProgrammingError:
                 pass
             except IndexError:
@@ -421,7 +423,7 @@ class Runners:
         return data
 
 
-@MeasureTime
+#@MeasureTime
 def start():
     Runners().start_group('animatron', date_start='2023-03-19', date_finish='2023-03-22')
 

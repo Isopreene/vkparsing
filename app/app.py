@@ -22,11 +22,13 @@ def get_groups_by_get_requests():
     else:
         return render_template('index.html', host=request.host)
 
+
 @app.route('/all')
 def get_all_groups():
     """Выводит все посты из всех групп, записанных в базу данных"""
     data = main.Runners.start_all()
     return data
+
 
 if __name__ == '__main__':
     app.run(debug=True)

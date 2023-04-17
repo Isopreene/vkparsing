@@ -1,2 +1,7 @@
 database
 app/__pycache__
+test.html
+/.idea
+/test.py
+/captcha.jpg
+/bin
