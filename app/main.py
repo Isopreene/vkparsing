@@ -58,7 +58,7 @@ class MainMethods:
         obj = solver.normal('captcha.jpg')
         return captcha.try_again(obj['code'])  # Просим вк попробовать еще раз вместе с решенной каптчей
 
-    def vk_login(self, groupname) -> dict | Exception:
+    def vk_login(self, groupname):
         """логинится в vk, заходит в группу groupname и получает все посты в виде словаря"""
         try:
             vk_session = vk_api.VkApi(token='fbd44e02fbd44e02fbd44e022ff8c62d19ffbd4fbd44e029807b26b8f927d40b91c66a9',
@@ -73,7 +73,7 @@ class MainMethods:
                 posts = vk.wall.get(domain=short_name.group(1), count=100,
                                     filter='all')  # dict, получаем все посты, count * 25 = их количество
             else:
-                raise TypeError('Неверно введён адрес или id сообщества')
+                return 'Неверно введён адрес или id сообщества'
             return posts
         except Exception as e:
             return e
@@ -216,43 +216,42 @@ class PostsHandler:
     def add_attachment(attachment, post_obj):
         """Добавляет к атрибуту __attachments объекта класса Post вложения.
         Иными словами, формирует список вложений к посту"""
-        match attachment.get('type'):
-            case 'photo':
-                photo = attachment['photo']
-                link = max(photo['sizes'], key=lambda x: x['height'] * x['width'])['url']
-                post_obj.add_attachment('photo', link)
-            case 'video':
-                video = attachment['video']
-                link = f"https://vk.com/video{video['owner_id']}_{video['id']}"  # _{video['access_key']}
-                post_obj.add_attachment('video', link)
-                # post_obj.add_attachment('video', video)
-            case 'link':
-                link = attachment['link']
-                post_obj.add_attachment('link', link['url'])
-            case 'audio':
-                audio = attachment['audio']
-                post_obj.add_attachment('audio', audio['url'])
-            case 'doc':  # документы – от 0 до n
-                doc = attachment['doc']
-                post_obj.add_attachment('doc', doc['url'])
-            case 'poll':  # опрос – от 0 до 1
-                poll = attachment['poll']
-                post_obj.add_attachment('doc', post_obj.get_poll(poll))
+        attachment_type = attachment.get('type')
+        if attachment_type == 'photo':
+            photo = attachment['photo']
+            link = max(photo['sizes'], key=lambda x: x['height'] * x['width'])['url']
+            post_obj.add_attachment('photo', link)
+        elif attachment_type == 'video':
+            video = attachment['video']
+            link = f"https://vk.com/video{video['owner_id']}_{video['id']}"  # _{video['access_key']}
+            post_obj.add_attachment('video', link)
+        elif attachment_type == 'link':
+            link = attachment['link']
+            post_obj.add_attachment('link', link['url'])
+        elif attachment_type == 'audio':
+            audio = attachment['audio']
+            post_obj.add_attachment('audio', audio['url'])
+        elif attachment_type == 'audio':
+            doc = attachment['doc']
+            post_obj.add_attachment('doc', doc['url'])
+        elif attachment_type == 'poll':
+            poll = attachment['poll']
+            post_obj.add_attachment('doc', post_obj.get_poll(poll))
+        else:
+            pass
 
     @staticmethod
     def download_photo(attachment, directory):
         """Скачивает фото поста в папку directory"""
-        match attachment.get('type'):
-            case 'photo':
-                photo = attachment['photo']
-                link = max(photo['sizes'], key=lambda x: x['height'] * x['width'])['url']
-                response = requests.get(link)
-                pattern = max(re.search(r'uniq_tag=(-?\w+)-?(\w+)?-?(\w+)?&?', response.url).groups(),
-                              key=lambda x: len(x) if x else 0)[:10]
-                filename = f"{pattern}.jpg"
-                if not os.path.exists(f'{directory}/{filename}'):
-                    with open(f'{directory}/{filename}', 'wb') as file:
-                        file.write(response.content)
+        if attachment.get('type') == 'photo':
+            link = max(attachment['photo']['sizes'], key=lambda x: x['height'] * x['width'])['url']
+            response = requests.get(link)
+            pattern = max(re.search(r'uniq_tag=(-?\w+)-?(\w+)?-?(\w+)?&?', response.url).groups(),
+                          key=lambda x: len(x) if x else 0)[:10]
+            filename = f"{pattern}.jpg"
+            if not os.path.exists(f'{directory}/{filename}'):
+                with open(f'{directory}/{filename}', 'wb') as file:
+                    file.write(response.content)
 
     def main(self, dir_to_group):
         """Проходит по списку постов, полученному из парсера, и создаёт объекты класса Post, занося их в список PostHandler().__processed_post"""

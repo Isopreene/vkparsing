@@ -11,14 +11,21 @@ services:
             - ./app:/app
         networks:
             - backend
+        environment:
+            - MYSQL_HOST=37.140.192.188
+            - MYSQL_USER=u2003667_vk
+            - MYSQL_PASSWORD=1T4zDELcUYa6h7yb
+            - MYSQL_DB=u2003667_default
 
     mysql-db:
+        platform: linux/x86_64
         container_name: mysql-db
         image: mysql:5.7
         restart: always
+        command: --default-authentication-plugin=mysql_native_password
         environment:
-            MYSQL_ROOT_PASSWORD: root
-            MYSQL_DATABASE: urlshortener
+            - MYSQL_ROOT_PASSWORD=1T4zDELcUYa6h7yb
+            - MYSQL_DATABASE=u2003667_default
         ports:
             - '3308:3306'
         volumes:
