@@ -5,10 +5,11 @@ from datetime import datetime, date
 from time import perf_counter
 import pymysql
 from pymysql.constants import CLIENT
-import requests
 import vk_api
 from twocaptcha import TwoCaptcha
 from functools import wraps
+import requests
+import yadisk
 
 
 arguments = {'host': '37.140.192.188', 'port': 3306, 'user': 'u2003667_vk',
@@ -241,8 +242,8 @@ class PostsHandler:
             pass
 
     @staticmethod
-    def download_photo(attachment, directory):
-        """Скачивает фото поста в папку directory"""
+    def download_photo_local(attachment, directory):
+        """Скачивает фото поста в папку directory на локальную машину"""
         if attachment.get('type') == 'photo':
             link = max(attachment['photo']['sizes'], key=lambda x: x['height'] * x['width'])['url']
             response = requests.get(link)
@@ -253,7 +254,7 @@ class PostsHandler:
                 with open(f'{directory}/{filename}', 'wb') as file:
                     file.write(response.content)
 
-    def main(self, dir_to_group):
+    def main(self):
         """Проходит по списку постов, полученному из парсера, и создаёт объекты класса Post, занося их в список PostHandler().__processed_post"""
         for post in self.data['items']:  # проходимся по dict и получаем list
             new_post = Post()
@@ -269,7 +270,6 @@ class PostsHandler:
             attachments = post['attachments']
             for attachment in attachments:
                 self.add_attachment(attachment, new_post)
-                #self.download_photo(attachment, dir_to_group)
             self.add_processed_post(new_post)
 
 
@@ -278,6 +278,17 @@ class MySQLHandler:
     def __init__(self, data_from_post_handler=None):
         """Получает данные в виде списка объектов класса Post и заносит их в базу данных. Проверяет на хэши, если такой уже есть в БД, то не заносит"""
         self.__posts = data_from_post_handler
+
+    @staticmethod
+    def download_and_upload_photo(access_token, groupname, photo_url):
+        y = yadisk.YaDisk(token=access_token)
+        pattern = max(re.search(r'uniq_tag=(-?\w+)-?(\w+)?-?(\w+)?&?', photo_url).groups(),
+                      key=lambda x: len(x) if x else 0)[:10]
+        path_to_file = f"{groupname}/{pattern}.jpg"
+        if not y.exists(groupname):
+            y.mkdir(groupname)
+        if not y.exists(path_to_file):
+            y.upload_url(photo_url, path_to_file)
 
     @staticmethod
     def create_database(host, user, password, port, client_flag):
@@ -308,8 +319,8 @@ class MySQLHandler:
         except Exception as e:
             raise e
 
-    def add_to_database(self, host, user, password, database, port, groupname, client_flag):
-        """добавить объекты класса Post в существующую таблицу в бд, если их там ещё нет"""
+    def add_to_database_and_download_photos(self, host, user, password, database, port, groupname, client_flag):
+        """добавить объекты класса Post в существующую таблицу в бд, если их там ещё нет, а также скачать фото в папку"""
         try:
             with pymysql.connect(host=host, user=user, password=password, port=port, database=database, client_flag=client_flag) as connection:
                 with connection.cursor() as cursor:
@@ -331,6 +342,10 @@ class MySQLHandler:
                             counter = 0
                             for attachment_type, attachment_list in [i for i in attachments.items() if i[1]]:
                                 for attachment in attachment_list:
+                                    if attachment_type == 'photo':
+                                        self.download_and_upload_photo(access_token='y0_AgAAAAAICbaeAAnQoQAAAADhyumQnrDWPKq4RJaNvozS0MynI_nnHew',
+                                                                       groupname=groupname,
+                                                                       photo_url=attachment)
                                     counter += 1
                                     column_name = f'attachment_{counter}'
                                     attachment_name = f'{attachment_type}: {attachment}'
@@ -411,12 +426,12 @@ class Runners:
             else:
                 path_to_group = parser.create_group(directory, group)
                 data_processing = PostsHandler(collected_data)
-                data_processing.main(path_to_group)
+                data_processing.main()
                 posts = data_processing.processed_posts
                 vk_sql = MySQLHandler(posts)
                 #vk_sql.create_database(**arguments)
                 vk_sql.create_table(**arguments, groupname=group)
-                vk_sql.add_to_database(**arguments, groupname=group)
+                vk_sql.add_to_database_and_download_photos(**arguments, groupname=group)
                 group_data = vk_sql.get_from_database(**arguments, groupname=group, date_start=date_start, date_finish=date_finish)[:100]
                 data.append({group: group_data})
         return data
@@ -424,7 +439,8 @@ class Runners:
 
 #@MeasureTime
 def start():
-    Runners().start_group('animatron', date_start='2023-03-19', date_finish='2023-03-22')
+    Runners().start_group('animatron')
 
 #print(MySQLHandler().get_tablenames(**arguments))
-#start()
+
+start()

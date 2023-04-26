@@ -1,7 +1,5 @@
 from flask import Flask, render_template, request
 import main
-#from waitress import serve
-#import sys
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
@@ -32,4 +30,3 @@ def get_all_groups():
 
 if __name__ == '__main__':
     app.run(debug=True)
-    #serve(app, host='0.0.0.0', port=8000)'''
