@@ -2,7 +2,7 @@ from flask import Flask, render_template, request
 import main
 
 app = Flask(__name__)
-app.config["JSON_SORT_KEYS"] = False
+#vk_parser_app.config["JSON_SORT_KEYS"] = False
 
 @app.route('/', methods=['get'])
 def get_groups_by_get_requests():

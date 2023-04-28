@@ -9,14 +9,37 @@ import vk_api
 from twocaptcha import TwoCaptcha
 from functools import wraps
 import requests
-import yadisk
 
+class KeysFromFiles:
 
-arguments = {'host': '37.140.192.188', 'port': 3306, 'user': 'u2003667_vk',
-             'password': '1T4zDELcUYa6h7yb', 'database': 'u2003667_default',
-             "client_flag": CLIENT.MULTI_STATEMENTS}  # данные сервера на хостинге
-directory = "/var/www/u1234567/data//www/vkparser.site"  # поменять
+    def get_db(self):
+        arguments = {'host': 'keys', 'user': 'root', 'password': None,
+                        'database': 'vk', 'client_flag': CLIENT.MULTI_STATEMENTS}
+        with open(f'keys/password.txt') as file:
+            password = file.read()
+        arguments['password'] = password
+        return arguments
 
+    def get_vk(self):
+        with open(f'{os.getcwd()}/keys/vk.json') as file:
+            try:
+                data = json.load(file)
+                return data
+            except Exception as E:
+                raise E
+
+    def get_captcha(self):
+        with open(f'{os.getcwd()}/keys/captcha.json') as file:
+            try:
+                data = json.load(file)
+                return data
+            except Exception as E:
+                raise E
+
+workdir = os.getcwd()
+arguments_db = KeysFromFiles().get_db()
+arguments_captcha = KeysFromFiles().get_captcha() #данные для решения капчи
+arguments_vk = KeysFromFiles().get_vk() #данные для вк
 
 class MeasureTime:
     def __init__(self, cls):
@@ -44,26 +67,20 @@ class MainMethods:
     """Основные методы для работы в программе"""
 
     @staticmethod
-    def captcha_handler(captcha):
+    def captcha_handler(captcha, **kwargs):
         """Обрабатывает капчу"""
-        config = {
-            'server': 'rucaptcha.com',
-            'apiKey': '9b74cd2841f2e078d5e8e21cff3df6d8',
-            'defaultTimeout': 120,
-            'recaptchaTimeout': 600,
-            'pollingInterval': 10,
-        }
-        solver = TwoCaptcha(**config)
+        solver = TwoCaptcha(**kwargs)
         with open('captcha.jpg', 'wb') as file:
             file.write(requests.get(captcha.get_url(), stream=True).content)
         obj = solver.normal('captcha.jpg')
+        if os.path.isfile('captcha.jpg'):
+            os.remove('captcha.jpg')
         return captcha.try_again(obj['code'])  # Просим вк попробовать еще раз вместе с решенной каптчей
 
-    def vk_login(self, groupname):
+    def vk_login(self, groupname, **kwargs):
         """логинится в vk, заходит в группу groupname и получает все посты в виде словаря"""
         try:
-            vk_session = vk_api.VkApi(token='fbd44e02fbd44e02fbd44e022ff8c62d19ffbd4fbd44e029807b26b8f927d40b91c66a9',
-                                      captcha_handler=self.captcha_handler)
+            vk_session = vk_api.VkApi(**kwargs, captcha_handler=self.captcha_handler)
             vk = vk_session.get_api()
             id_ = re.search(r'((public)|(club))(\d+)', groupname)
             short_name = re.search(r'(\w+)', groupname)
@@ -81,19 +98,17 @@ class MainMethods:
 
     @staticmethod
     def create_group(directory, groupname):
-        """Создаёт папку с именем группы groupname в корне программы"""
-        try:
-            if not os.path.exists(f'{directory}/files'):
-                os.mkdir(f'{directory}/files')
-            if not os.path.exists(f'{directory}/files/{groupname}'):
-                os.mkdir(f'{directory}/files/{groupname}')
-            directory = f'{directory}/files/{groupname}'
-        except Exception as e:
-            print(e, 'Не удалось создать родительские папки')
+        """Создаёт папку с именем группы groupname в корне программы и возвращает workdir/files/groupname,
+        где workdir – рабочая папка, groupname – имя группы"""
+        if not os.path.exists(f'{directory}/files'):
+            os.mkdir(f'{directory}/files')
+        if not os.path.exists(f'{directory}/files/{groupname}'):
+            os.mkdir(f'{directory}/files/{groupname}')
+        directory = f'{directory}/files/{groupname}'
         return directory
 
     @staticmethod
-    def create_json(groupname, data):  # не нужен, работает без него
+    def create_json(groupname, data):  # на данный момент не используется
         """Создаёт json-файл и загружает его в корень папки с картинками. На данный момент не используется"""
         with open(f'{groupname}.json', 'w') as file:
             file.write('[')
@@ -243,7 +258,7 @@ class PostsHandler:
 
     @staticmethod
     def download_photo_local(attachment, directory):
-        """Скачивает фото поста в папку directory на локальную машину"""
+        """Скачивает фотографии поста на локальную машину в директорию workdir/files/groupname"""
         if attachment.get('type') == 'photo':
             link = max(attachment['photo']['sizes'], key=lambda x: x['height'] * x['width'])['url']
             response = requests.get(link)
@@ -254,7 +269,7 @@ class PostsHandler:
                 with open(f'{directory}/{filename}', 'wb') as file:
                     file.write(response.content)
 
-    def main(self):
+    def make_posts(self):
         """Проходит по списку постов, полученному из парсера, и создаёт объекты класса Post, занося их в список PostHandler().__processed_post"""
         for post in self.data['items']:  # проходимся по dict и получаем list
             new_post = Post()
@@ -273,28 +288,20 @@ class PostsHandler:
             self.add_processed_post(new_post)
 
 
-class MySQLHandler:
+class ToDatabase:
 
     def __init__(self, data_from_post_handler=None):
         """Получает данные в виде списка объектов класса Post и заносит их в базу данных. Проверяет на хэши, если такой уже есть в БД, то не заносит"""
         self.__posts = data_from_post_handler
 
-    @staticmethod
-    def download_and_upload_photo(access_token, groupname, photo_url):
-        y = yadisk.YaDisk(token=access_token)
-        pattern = max(re.search(r'uniq_tag=(-?\w+)-?(\w+)?-?(\w+)?&?', photo_url).groups(),
-                      key=lambda x: len(x) if x else 0)[:10]
-        path_to_file = f"{groupname}/{pattern}.jpg"
-        if not y.exists(groupname):
-            y.mkdir(groupname)
-        if not y.exists(path_to_file):
-            y.upload_url(photo_url, path_to_file)
+
 
     @staticmethod
-    def create_database(host, user, password, port, client_flag):
+    def create_database(**kwargs):
         """создаёт` базу данных, куда будем записывать всё"""
         try:
-            with pymysql.connect(host=host, user=user, password=password, port=port, client_flag=client_flag) as connection:
+            with pymysql.connect(host=kwargs['host'], user=kwargs['user'], password=kwargs['password'],
+                                 client_flag=kwargs['client_flag']) as connection:
                 with connection.cursor() as cursor:
                     cursor.execute('show databases')
                     if ('vk',) not in cursor:
@@ -303,10 +310,10 @@ class MySQLHandler:
             raise e
 
     @staticmethod
-    def create_table(host, user, password, database, groupname, port, client_flag):
+    def create_table(groupname, **kwargs):
         """Создаёт таблицу с именем groupname в базе данных database, если её там ещё нет"""
         try:
-            with pymysql.connect(host=host, user=user, password=password, port=port, database=database, client_flag=client_flag) as connection:
+            with pymysql.connect(**kwargs) as connection:
                 with connection.cursor() as cursor:
                     cursor.execute('show tables')
                     if (groupname,) not in cursor:
@@ -319,10 +326,11 @@ class MySQLHandler:
         except Exception as e:
             raise e
 
-    def add_to_database_and_download_photos(self, host, user, password, database, port, groupname, client_flag):
-        """добавить объекты класса Post в существующую таблицу в бд, если их там ещё нет, а также скачать фото в папку"""
+    def add_to_database(self, groupname, **kwargs):
+        """добавляет объекты класса Post в существующую таблицу в бд,
+        если их там ещё нет"""
         try:
-            with pymysql.connect(host=host, user=user, password=password, port=port, database=database, client_flag=client_flag) as connection:
+            with pymysql.connect(**kwargs) as connection:
                 with connection.cursor() as cursor:
                     for post in self.__posts:
                         check_hash = post.hash
@@ -342,11 +350,6 @@ class MySQLHandler:
                             counter = 0
                             for attachment_type, attachment_list in [i for i in attachments.items() if i[1]]:
                                 for attachment in attachment_list:
-                                    if attachment_type == 'photo':
-                                        pass
-                                        """self.download_and_upload_photo(access_token='y0_AgAAAAAICbaeAAnQoQAAAADhyumQnrDWPKq4RJaNvozS0MynI_nnHew',
-                                                                       groupname=groupname,
-                                                                       photo_url=attachment)"""
                                     counter += 1
                                     column_name = f'attachment_{counter}'
                                     attachment_name = f'{attachment_type}: {attachment}'
@@ -356,15 +359,18 @@ class MySQLHandler:
         except Exception as e:
             raise e
 
+
+class FromDatabase:
+
     @staticmethod
-    def get_from_database(host, user, password, database, port, groupname, date_start, date_finish, client_flag):
+    def get_from_database(groupname, date_start, date_finish, **kwargs):
         """Получает данные из дб database, таблицы groupname, с указанием даты старта date_start и даты финиша date_finish"""
         if not date_start:
             date_start = date(year=1, month=1, day=1)
         if not date_finish:
             date_finish = datetime.now()
         try:
-            with pymysql.connect(host=host, user=user, password=password, database=database, port=port, client_flag=client_flag) as connection:
+            with pymysql.connect(**kwargs) as connection:
                 with connection.cursor() as cursor:
                     query = f"select post_text, post_date, post_id, is_repost, attachment_1, attachment_2, attachment_3, " \
                             "attachment_4, attachment_5, attachment_6, attachment_7, attachment_8, attachment_9, attachment_10 " \
@@ -382,10 +388,10 @@ class MySQLHandler:
             raise e
 
     @staticmethod
-    def get_tablenames(host, user, password, database, port, client_flag):
+    def get_tablenames(**kwargs):
         """Получает имена таблиц (групп), уже существующих в бд database"""
         try:
-            with pymysql.connect(host=host, user=user, password=password, database=database, port=port, client_flag=client_flag) as connection:
+            with pymysql.connect(**kwargs) as connection:
                 with connection.cursor() as cursor:
                     query = f'show tables'
                     cursor.execute(query)
@@ -400,46 +406,36 @@ class Runners:
     @staticmethod
     def start_all(date_start=None, date_finish=None):
         """При отправке запроса all или без указания групп"""
-        vk_sql = MySQLHandler()
-        groups = vk_sql.get_tablenames(**arguments)
-        data = list({group: vk_sql.get_from_database(**arguments, groupname=group,
-                                                     date_start=date_start, date_finish=date_finish)}
-                    for group in groups)
+        vk_sql = FromDatabase()
+        groups = vk_sql.get_tablenames(**arguments_db)
+        data = list({group: vk_sql.get_from_database(group, date_start, date_finish, **arguments_db)} for group in groups)
         return data
 
     @staticmethod
-    def start_group(*groups_to_check, date_start=None, date_finish=None):
+    def start_group(*groups_to_check, date_start=None, date_finish=None, args_db, args_vk):
         """При отправке запроса с указанием групп"""
-        vk_sql = MySQLHandler()
-        data = list()
-        parser = MainMethods()
-        for group in groups_to_check:
-            try:
-                group_data = vk_sql.get_from_database(**arguments, groupname=group,
-                                                      date_start=date_start, date_finish=date_finish)
-            except pymysql.err.ProgrammingError:
-                pass
-            except IndexError:
-                pass
-            collected_data = parser.vk_login(groupname=group)
-            if isinstance(collected_data, Exception):
+        data = list() #итоговый список словарей, переделать в словарь {groupname1: data1, ...}
+        for group in groups_to_check: #?groups=group1,group2,group3, groups_to_check это список групп в get-запросе
+            parser = MainMethods()
+            collected_data = parser.vk_login(**args_vk, groupname=group)  # собрали данные из вк
+            if isinstance(collected_data, Exception):  # если доступ к группе закрыт
                 data.append({group: f'Доступ к группе {group} закрыт, невозможно получить данные'})
-            else:
-                #path_to_group = parser.create_group(directory, group)
-                data_processing = PostsHandler(collected_data)
-                data_processing.main()
-                posts = data_processing.processed_posts
-                vk_sql = MySQLHandler(posts)
-                #vk_sql.create_database(**arguments)
-                vk_sql.create_table(**arguments, groupname=group)
-                vk_sql.add_to_database_and_download_photos(**arguments, groupname=group)
-                group_data = vk_sql.get_from_database(**arguments, groupname=group, date_start=date_start, date_finish=date_finish)[:100]
+            else: #собираем с вк, добавляем в бд и выводим из бд
+                data_converter = PostsHandler(collected_data)
+                data_converter.make_posts() # из вк в список объектов класса Post
+                posts = data_converter.processed_posts
+                to_sql = ToDatabase(posts)
+                to_sql.create_database(**args_db)
+                to_sql.create_table(**args_db, groupname=group)
+                to_sql.add_to_database(**args_db, groupname=group)
+                from_sql = FromDatabase()
+                group_data = from_sql.get_from_database(**args_db, groupname=group, date_start=date_start, date_finish=date_finish)[:100]
                 data.append({group: group_data})
         return data
 
 
 #@MeasureTime
 def start():
-    Runners().start_group('animatron')
+    Runners().start_group('animatron', args_db=arguments_db, args_vk=arguments_vk)
 
-#print(MySQLHandler().get_tablenames(**arguments))
+#start()

@@ -1,6 +1,6 @@
-database
-app/__pycache__
-/.idea
-/test.py
-/captcha.jpg
+/env
 /bin
+/database
+/lib
+/share
+test.py
