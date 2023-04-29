@@ -1,0 +1,6 @@
+/env
+/bin
+/database
+/lib
+/share
+test.py

@@ -1,45 +1,8 @@
-import json
-import os
-import re
+import json, os, re, pymysql, vk_api, requests
 from datetime import datetime, date
 from time import perf_counter
-import pymysql
-from pymysql.constants import CLIENT
-import vk_api
 from twocaptcha import TwoCaptcha
 from functools import wraps
-import requests
-
-class KeysFromFiles:
-
-    def get_db(self):
-        arguments = {'host': 'keys', 'user': 'root', 'password': None,
-                        'database': 'vk', 'client_flag': CLIENT.MULTI_STATEMENTS}
-        with open(f'keys/password.txt') as file:
-            password = file.read()
-        arguments['password'] = password
-        return arguments
-
-    def get_vk(self):
-        with open(f'{os.getcwd()}/keys/vk.json') as file:
-            try:
-                data = json.load(file)
-                return data
-            except Exception as E:
-                raise E
-
-    def get_captcha(self):
-        with open(f'{os.getcwd()}/keys/captcha.json') as file:
-            try:
-                data = json.load(file)
-                return data
-            except Exception as E:
-                raise E
-
-workdir = os.getcwd()
-arguments_db = KeysFromFiles().get_db()
-arguments_captcha = KeysFromFiles().get_captcha() #данные для решения капчи
-arguments_vk = KeysFromFiles().get_vk() #данные для вк
 
 class MeasureTime:
     def __init__(self, cls):
@@ -300,8 +263,7 @@ class ToDatabase:
     def create_database(**kwargs):
         """создаёт` базу данных, куда будем записывать всё"""
         try:
-            with pymysql.connect(host=kwargs['host'], user=kwargs['user'], password=kwargs['password'],
-                                 client_flag=kwargs['client_flag']) as connection:
+            with pymysql.connect(**kwargs) as connection:
                 with connection.cursor() as cursor:
                     cursor.execute('show databases')
                     if ('vk',) not in cursor:
@@ -404,38 +366,34 @@ class FromDatabase:
 class Runners:
 
     @staticmethod
-    def start_all(date_start=None, date_finish=None):
+    def start_all(args_db, date_start=None, date_finish=None):
         """При отправке запроса all или без указания групп"""
         vk_sql = FromDatabase()
-        groups = vk_sql.get_tablenames(**arguments_db)
-        data = list({group: vk_sql.get_from_database(group, date_start, date_finish, **arguments_db)} for group in groups)
+        groups = vk_sql.get_tablenames(**args_db)
+        data = list({group: vk_sql.get_from_database(group, date_start, date_finish, **args_db)} for group in groups)
         return data
 
     @staticmethod
-    def start_group(*groups_to_check, date_start=None, date_finish=None, args_db, args_vk):
+    def start_group(*groups_to_check, args_db, args_vk, date_start=None, date_finish=None):
         """При отправке запроса с указанием групп"""
-        data = list() #итоговый список словарей, переделать в словарь {groupname1: data1, ...}
+        data = dict() #итоговый список словарей, переделать в словарь {groupname1: data1, ...}
         for group in groups_to_check: #?groups=group1,group2,group3, groups_to_check это список групп в get-запросе
             parser = MainMethods()
             collected_data = parser.vk_login(**args_vk, groupname=group)  # собрали данные из вк
-            if isinstance(collected_data, Exception):  # если доступ к группе закрыт
-                data.append({group: f'Доступ к группе {group} закрыт, невозможно получить данные'})
+            if isinstance(collected_data, vk_api.exceptions.ApiError):
+                if str(collected_data) == '[15] Access denied: this wall available only for community members': # если доступ к группе закрыт
+                    data.update({group: f'Доступ к группе {group} закрыт, невозможно получить данные'})
+                elif str(collected_data) == '[100] One of the parameters specified was missing or invalid: owner_id is undefined': # если группа не существует
+                    data.update({group: f'Группа {group} не найдена, проверьте данные'})
             else: #собираем с вк, добавляем в бд и выводим из бд
                 data_converter = PostsHandler(collected_data)
                 data_converter.make_posts() # из вк в список объектов класса Post
                 posts = data_converter.processed_posts
                 to_sql = ToDatabase(posts)
-                to_sql.create_database(**args_db)
+                #to_sql.create_database(**args_db)
                 to_sql.create_table(**args_db, groupname=group)
                 to_sql.add_to_database(**args_db, groupname=group)
                 from_sql = FromDatabase()
                 group_data = from_sql.get_from_database(**args_db, groupname=group, date_start=date_start, date_finish=date_finish)[:100]
-                data.append({group: group_data})
+                data.update({group: group_data})
         return data
-
-
-#@MeasureTime
-def start():
-    Runners().start_group('animatron', args_db=arguments_db, args_vk=arguments_vk)
-
-#start()
