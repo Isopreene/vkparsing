@@ -4,3 +4,5 @@
 /lib
 /share
 test.py
+.gitignore
+.dockerignore
