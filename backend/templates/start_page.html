@@ -4,9 +4,14 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Парсер</title>
+    <title>Парсер ВК</title>
     <style>
+
         h1 {
+            text-align: center;
+        }
+
+        h3 {
             text-align: center;
         }
 
@@ -27,37 +32,81 @@
         a {
             font-size: 18px;
             color: black;
-            text-decoration: none;
+            text-decoration: underline;
         }
 
         .command {
             border-right: 1px solid;
         }
 
+        .main_description {
+            display: grid;
+            justify-content: flex-start;
+
+            width: 40%;
+            margin: 0 auto;
+            border: 1px solid;
+            border-radius: 15px;
+            padding: 15px 15px;
+        }
+
         .description {
-            justify-self: flex-end;
+
+            justify-self: flex-start;
+            text-align: justify-all;
         }
 
     </style>
 </head>
 <body>
     <h1>Парсер групп вКонтакте</h1>
+    <h3>Привет! Это парсер для групп vk.com</h3>
+    <div class="main_description"> <b>Пошлите get-запрос вида {{ host }}/?params. Список доступных параметров:</b>
+                <br><li>groups=(через запятую)</li>
+                <li>all=(True/False)</li>
+                <li>date_start=(YYYY-MM-DD)</li>
+                <li>date_finish=(YYYY-MM-DD)</li>
+    <br> Запрос {{host}}/all работает как {{host}}/?all=True</div>
+    <br>
     <div class="commands">
         <div class="command">
             <a href="/?groups=animatron">{{ host }}/?groups=animatron</a>
         </div>
         <div class="description">
-            какое-то описание
+            Проверить группу vk.com/animatron.
+            <br>Взять последние 100 записей группы
         </div>
 
         <div class="command">
-            <a href="/?groups=public218140062">{{ host }}/?groups=public218140062</a>
+            <a href="/?groups=teplomult,animatron,public218140062">{{ host }}/?groups=teplomult,animatron,public218140062</a>
         </div>
         <div class="description">
-            'Привет! Это парсер для групп vk.com. 
-            Пошлите get-запрос вида domain.com/?params или domain.com/params.
-            <br>Список доступных параметров: groups=(через запятую), all=(True/False), 
-            <br>date_start=(YYYY-MM-DD), date_finish=(YYYY-MM-DD)'
+            Проверить группы vk.com/teplomult, vk.com/animatron, vk.com/public218140062.
+            <br>Взять последние 100 записей группы
+        </div>
+
+        <div class="command">
+            <a href="/?groups=animatron&date_start=2023-01-01">{{ host }}/?groups=animatron&date_start=2023-01-012</a>
+        </div>
+        <div class="description">
+            Проверить группу vk.com/animatron.
+            <br>Взять последние 100 записей с 1 января 2023 года по текущий день
+        </div>
+
+        <div class="command">
+            <a href="/?groups=animatron&date_start=2023-01-01&date_finish=2023-04-04">{{ host }}/?groups=animatron&date_start=2023-01-01&date_finish=2023-04-04</a>
+        </div>
+        <div class="description">
+            Проверить группу vk.com/animatron.
+            <br>Взять последние 100 записей с 1 января 2023 года по 4 апреля 2023 года
+        </div>
+
+        <div class="command">
+            <a href="/all">{{ host }}/all</a>
+            <br><a href="/?all=True">{{ host }}/?all=True</a>
+        </div>
+        <div class="description">
+            Взять последние 100 записей каждой группы, хранящейся в базе данных
         </div>
     </div>
 </body>
