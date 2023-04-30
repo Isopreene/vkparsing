@@ -3,7 +3,8 @@ from datetime import datetime, date
 from time import perf_counter
 from twocaptcha import TwoCaptcha
 from functools import wraps
-
+import work_with_photos
+from itertools import chain
 class MeasureTime:
     def __init__(self, cls):
         self.cls = cls
@@ -58,17 +59,6 @@ class MainMethods:
             return posts
         except Exception as e:
             return e
-
-    @staticmethod
-    def create_group(directory, groupname):
-        """Создаёт папку с именем группы groupname в корне программы и возвращает workdir/files/groupname,
-        где workdir – рабочая папка, groupname – имя группы"""
-        if not os.path.exists(f'{directory}/files'):
-            os.mkdir(f'{directory}/files')
-        if not os.path.exists(f'{directory}/files/{groupname}'):
-            os.mkdir(f'{directory}/files/{groupname}')
-        directory = f'{directory}/files/{groupname}'
-        return directory
 
     @staticmethod
     def create_json(groupname, data):  # на данный момент не используется
@@ -219,19 +209,6 @@ class PostsHandler:
         else:
             pass
 
-    @staticmethod
-    def download_photo_local(attachment, directory):
-        """Скачивает фотографии поста на локальную машину в директорию workdir/files/groupname"""
-        if attachment.get('type') == 'photo':
-            link = max(attachment['photo']['sizes'], key=lambda x: x['height'] * x['width'])['url']
-            response = requests.get(link)
-            pattern = max(re.search(r'uniq_tag=(-?\w+)-?(\w+)?-?(\w+)?&?', response.url).groups(),
-                          key=lambda x: len(x) if x else 0)[:10]
-            filename = f"{pattern}.jpg"
-            if not os.path.exists(f'{directory}/{filename}'):
-                with open(f'{directory}/{filename}', 'wb') as file:
-                    file.write(response.content)
-
     def make_posts(self):
         """Проходит по списку постов, полученному из парсера, и создаёт объекты класса Post, занося их в список PostHandler().__processed_post"""
         for post in self.data['items']:  # проходимся по dict и получаем list
@@ -314,9 +291,8 @@ class ToDatabase:
                                 for attachment in attachment_list:
                                     counter += 1
                                     column_name = f'attachment_{counter}'
-                                    attachment_name = f'{attachment_type}: {attachment}'
                                     query = f"update {groupname} set {column_name} = (%s) where post_hash = %s"
-                                    cursor.execute(query, [attachment_name, check_hash])
+                                    cursor.execute(query, [attachment, check_hash])
                             connection.commit()
         except Exception as e:
             raise e
@@ -341,8 +317,6 @@ class FromDatabase:
                             "order by post_date desc"
                     cursor.execute(query, (date_start, date_finish))
                     data = cursor.fetchall()
-                    query = f'SHOW COLUMNS FROM {groupname}'
-                    cursor.execute(query)
                     columns = ('Текст', 'Дата', 'ID', 'Репост', 'Вложение 1', 'Вложение 2', 'Вложение 3', 'Вложение 4',
                                'Вложение 5', 'Вложение 6', 'Вложение 7', 'Вложение 8', 'Вложение 9', 'Вложение 10')
                     return list({key: value for key, value in zip(columns, row) if value} for row in data)
@@ -362,7 +336,27 @@ class FromDatabase:
         except Exception as e:
             raise e
 
+    @staticmethod
+    def get_group_urls(groupname, **kwargs):
+        """Возвращает список ссылок на фото из дб vk, таблицы groupname,"""
+        try:
+            with pymysql.connect(**kwargs) as connection:
+                with connection.cursor() as cursor:
+                    query = f"select attachment_1, attachment_2, attachment_3, " \
+                            "attachment_4, attachment_5, attachment_6, attachment_7, attachment_8, attachment_9, attachment_10 " \
+                            f"from {groupname} " \
+                            "order by post_date desc"
+                    cursor.execute(query)
+                    data = cursor.fetchall()
+                    return list(filter(lambda x: x and 'userapi.com' in x, chain.from_iterable(data)))
+        except Exception as e:
+            raise e
 
+    def get_all_urls(self, **kwargs):
+        """При отправке запроса all или без указания групп"""
+        groups = self.get_tablenames(**kwargs)
+        data = [{group: self.get_group_urls(groupname=group, **kwargs)} for group in groups]
+        return data
 class Runners:
 
     @staticmethod
@@ -370,8 +364,22 @@ class Runners:
         """При отправке запроса all или без указания групп"""
         vk_sql = FromDatabase()
         groups = vk_sql.get_tablenames(**args_db)
-        data = list({group: vk_sql.get_from_database(group, date_start, date_finish, **args_db)} for group in groups)
+        data = {group: vk_sql.get_from_database(group, date_start, date_finish, **args_db) for group in groups}
         return data
+
+    @staticmethod
+    def upload_all(token, args_db):
+        vk_sql = FromDatabase()
+        url_photos = vk_sql.get_all_urls(**args_db)
+        photographer = work_with_photos.DownloadPhotos()
+        yagent = photographer.login_to_cloud(access_token=token)
+        photographer.make_files_folder(agent=yagent)
+        for group in url_photos:
+            for groupname, post_urls in group:
+                for url in post_urls:
+                    photographer.upload_to_cloud(agent=yagent, groupname=groupname, photo_url=url)
+        return photographer.get_url_to_files(agent=yagent)
+
 
     @staticmethod
     def start_group(*groups_to_check, args_db, args_vk, date_start=None, date_finish=None):

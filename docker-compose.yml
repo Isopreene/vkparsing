@@ -24,6 +24,32 @@ services:
       - 3306
       - 33060
 
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6379:6379"
+
+  celery-worker:
+    build: backend
+    command: celery -A app.celery worker --loglevel=info
+    restart: always
+    volumes:
+      - .:/code
+    depends_on:
+      - db
+      - redis
+
+  celery-beat:
+    build: backend
+    command: celery -A app.celery beat
+    restart: always
+    volumes:
+      - .:/code
+    depends_on:
+      - db
+      - redis
+
   backend:
     build:
       context: backend
@@ -33,6 +59,7 @@ services:
       - db-password
       - vk
       - captcha
+      - cloud
     ports:
       - 8000:8000
     networks:
@@ -62,6 +89,8 @@ secrets:
     file: db/vk.json
   captcha:
     file: db/captcha.json
+  cloud:
+    file: db/cloud.txt
 
 networks:
   backnet:

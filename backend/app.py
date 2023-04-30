@@ -2,12 +2,16 @@ from flask import Flask, render_template, request
 from os import getcwd
 from json import load
 from pymysql.constants import CLIENT
-
 import main
+from celery import Celery
+from celery.schedules import crontab
+from celery.utils.log import get_task_logger
+
 
 class KeysFromFiles:
 
-    def get_db(self):
+    @staticmethod
+    def get_db():
         arguments = {'host': 'db', 'user': 'root', 'password': None,
                         'database': 'vk', 'client_flag': CLIENT.MULTI_STATEMENTS}
         with open('/run/secrets/db-password') as file:
@@ -15,7 +19,8 @@ class KeysFromFiles:
         arguments['password'] = password
         return arguments
 
-    def get_vk(self):
+    @staticmethod
+    def get_vk():
         with open('/run/secrets/vk') as file:
             try:
                 data = load(file)
@@ -23,7 +28,8 @@ class KeysFromFiles:
             except Exception as E:
                 raise E
 
-    def get_captcha(self):
+    @staticmethod
+    def get_captcha():
         with open('/run/secrets/captcha') as file:
             try:
                 data = load(file)
@@ -31,15 +37,60 @@ class KeysFromFiles:
             except Exception as E:
                 raise E
 
-workdir = getcwd()
-arguments_db = KeysFromFiles().get_db()
-arguments_vk = KeysFromFiles().get_vk() #данные для вк
-arguments_captcha = KeysFromFiles().get_captcha() #данные для решения капчи
+    @staticmethod
+    def get_cloud():
+        with open('/run/secrets/cloud') as file:
+            token = file.read().strip()
+        return token
 
+def make_celery(app):
+    #Celery configuration
+    app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
+    app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
+    app.config['CELERYBEAT_SCHEDULE'] = {
+        'periodic_task-every-hour': {
+            'task': 'periodic_task',
+            'schedule': crontab(1)
+        }
+    }
+
+    celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
+    celery.conf.update(app.config)
+    TaskBase = celery.Task
+    class ContextTask(TaskBase):
+        abstract = True
+        def __call__(self, *args, **kwargs):
+            with app.app_context():
+                return TaskBase.__call__(self, *args, **kwargs)
+    celery.Task = ContextTask
+    return celery
+
+workdir = getcwd()
+# arguments_db = KeysFromFiles().get_db()
+# arguments_vk = KeysFromFiles().get_vk() #данные для вк
+# arguments_captcha = KeysFromFiles().get_captcha() #данные для решения капчи
+# arguments_cloud = KeysFromFiles().get_cloud
+
+# для локальной базы
+arguments_db = {'host': 'localhost', 'port': 3306, 'user': 'root', 'password': '12august', 'database': 'vk', 'client_flag': CLIENT.MULTI_STATEMENTS}
+arguments_vk = {"token": "fbd44e02fbd44e02fbd44e022ff8c62d19ffbd4fbd44e029807b26b8f927d40b91c66a9"}
+arguments_captcha = {"server": "rucaptcha.com", "apiKey": "9b74cd2841f2e078d5e8e21cff3df6d8", "defaultTimeout": 120, "recaptchaTimeout": 600, "pollingInterval": 10}
+aruments_cloud = 'y0_AgAAAAAICbaeAAnQoQAAAADhyumQnrDWPKq4RJaNvozS0MynI_nnHew'
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 app.debug = True
+
+logger = get_task_logger(__name__)
+celery = make_celery(app)
+
+def link_to_cloud():
+    print("Task complete!")
+
+@celery.task(name = "periodic_task")
+def periodic_task():
+    print('Hi! from periodic_task')
+    logger.info("Hello! from periodic task")
 
 
 @app.route('/', methods=['get'])
