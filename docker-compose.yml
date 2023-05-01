@@ -31,7 +31,7 @@ services:
       - "6379:6379"
 
   celery-worker:
-    build: backend
+    build: .backend
     command: celery -A app.celery worker --loglevel=info
     restart: always
     volumes:
@@ -41,7 +41,7 @@ services:
       - redis
 
   celery-beat:
-    build: backend
+    build: .backend
     command: celery -A app.celery beat
     restart: always
     volumes:
