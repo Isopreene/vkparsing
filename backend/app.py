@@ -32,7 +32,7 @@ def make_celery(app):
 arguments_db = keys.KeysFromFiles().get_db()
 arguments_vk = keys.KeysFromFiles().get_vk() #данные для вк
 arguments_captcha = keys.KeysFromFiles().get_captcha() #данные для решения капчи
-arguments_cloud = keys.KeysFromFiles().get_cloud
+arguments_cloud = keys.KeysFromFiles().get_cloud()
 
 
 app = Flask(__name__)
