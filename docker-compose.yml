@@ -24,25 +24,6 @@ services:
       - 3306
       - 33060
 
-  backend:
-    build:
-      context: backend
-      target: builder
-    restart: always
-    secrets:
-      - db-password
-      - vk
-      - captcha
-      - cloud
-    ports:
-      - 8000:8000
-    networks:
-      - backnet
-      - frontnet
-    depends_on:
-      db:
-        condition: service_healthy
-
   redis:
     image: redis:alpine
     restart: always
@@ -68,6 +49,25 @@ services:
     depends_on:
       - db
       - redis
+
+  backend:
+    build:
+      context: backend
+      target: builder
+    restart: always
+    secrets:
+      - db-password
+      - vk
+      - captcha
+      - cloud
+    ports:
+      - 8000:8000
+    networks:
+      - backnet
+      - frontnet
+    depends_on:
+      db:
+        condition: service_healthy
 
   proxy:
     build: proxy

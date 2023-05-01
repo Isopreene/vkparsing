@@ -1,47 +1,10 @@
 from flask import Flask, render_template, request
 from os import getcwd
-from json import load
-from pymysql.constants import CLIENT
 import main
+import keys
 from celery import Celery
 from celery.schedules import crontab
 from celery.utils.log import get_task_logger
-
-
-class KeysFromFiles:
-
-    @staticmethod
-    def get_db():
-        arguments = {'host': 'db', 'user': 'root', 'password': None,
-                        'database': 'vk', 'client_flag': CLIENT.MULTI_STATEMENTS}
-        with open('/run/secrets/db-password') as file:
-            password = file.read().strip()
-        arguments['password'] = password
-        return arguments
-
-    @staticmethod
-    def get_vk():
-        with open('/run/secrets/vk') as file:
-            try:
-                data = load(file)
-                return data
-            except Exception as E:
-                raise E
-
-    @staticmethod
-    def get_captcha():
-        with open('/run/secrets/captcha') as file:
-            try:
-                data = load(file)
-                return data
-            except Exception as E:
-                raise E
-
-    @staticmethod
-    def get_cloud():
-        with open('/run/secrets/cloud') as file:
-            token = file.read().strip()
-        return token
 
 def make_celery(app):
     #Celery configuration
@@ -50,7 +13,7 @@ def make_celery(app):
     app.config['CELERYBEAT_SCHEDULE'] = {
         'periodic_task-every-hour': {
             'task': 'periodic_task',
-            'schedule': crontab(1)
+            'schedule': crontab(hour='*')
         }
     }
 
@@ -66,10 +29,15 @@ def make_celery(app):
     return celery
 
 workdir = getcwd()
-arguments_db = KeysFromFiles().get_db()
-arguments_vk = KeysFromFiles().get_vk() #данные для вк
-arguments_captcha = KeysFromFiles().get_captcha() #данные для решения капчи
-arguments_cloud = KeysFromFiles().get_cloud
+arguments_db = keys.KeysFromFiles().get_db()
+arguments_vk = keys.KeysFromFiles().get_vk() #данные для вк
+arguments_captcha = keys.KeysFromFiles().get_captcha() #данные для решения капчи
+arguments_cloud = keys.KeysFromFiles().get_cloud
+
+# arguments_db = {'host': 'localhost', 'port': 3306, 'user': 'root', 'password': '12august', 'database': 'vk'}
+# arguments_vk = {"token": "fbd44e02fbd44e02fbd44e022ff8c62d19ffbd4fbd44e029807b26b8f927d40b91c66a9"}
+# arguments_captcha = {"server": "rucaptcha.com", "apiKey": "9b74cd2841f2e078d5e8e21cff3df6d8", "defaultTimeout": 120, "recaptchaTimeout": 600, "pollingInterval": 10}
+# arguments_cloud = 'y0_AgAAAAAICbaeAAnQoQAAAADhyumQnrDWPKq4RJaNvozS0MynI_nnHew'
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False

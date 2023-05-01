@@ -26,7 +26,6 @@ class MeasureTime:
             return wrapped
         return attr
 
-
 class MainMethods:
     """Основные методы для работы в программе"""
 
@@ -69,7 +68,6 @@ class MainMethods:
                 json.dump(row, file, indent=4, default=str, ensure_ascii=False)
                 file.write(',\n')
             file.write(']')
-
 
 class Post:
 
@@ -159,7 +157,6 @@ class Post:
         poll_answers = [poll['question'], {answer: vote for answer, vote in zip(poll_answers_texts, votes)}]
         return {'image': poll_image_url if poll_image else None, 'answers': poll_answers}
 
-
 class PostsHandler:
 
     def __init__(self, data_from_parser):
@@ -226,7 +223,6 @@ class PostsHandler:
             for attachment in attachments:
                 self.add_attachment(attachment, new_post)
             self.add_processed_post(new_post)
-
 
 class ToDatabase:
 
@@ -297,7 +293,6 @@ class ToDatabase:
         except Exception as e:
             raise e
 
-
 class FromDatabase:
 
     @staticmethod
@@ -357,6 +352,7 @@ class FromDatabase:
         groups = self.get_tablenames(**kwargs)
         data = [{group: self.get_group_urls(groupname=group, **kwargs)} for group in groups]
         return data
+
 class Runners:
 
     @staticmethod
