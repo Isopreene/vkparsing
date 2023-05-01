@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request
-from os import getcwd
+
 import main
 import keys
 from celery import Celery
@@ -28,16 +28,12 @@ def make_celery(app):
     celery.Task = ContextTask
     return celery
 
-workdir = getcwd()
+
 arguments_db = keys.KeysFromFiles().get_db()
 arguments_vk = keys.KeysFromFiles().get_vk() #данные для вк
 arguments_captcha = keys.KeysFromFiles().get_captcha() #данные для решения капчи
 arguments_cloud = keys.KeysFromFiles().get_cloud
 
-# arguments_db = {'host': 'localhost', 'port': 3306, 'user': 'root', 'password': '12august', 'database': 'vk'}
-# arguments_vk = {"token": "fbd44e02fbd44e02fbd44e022ff8c62d19ffbd4fbd44e029807b26b8f927d40b91c66a9"}
-# arguments_captcha = {"server": "rucaptcha.com", "apiKey": "9b74cd2841f2e078d5e8e21cff3df6d8", "defaultTimeout": 120, "recaptchaTimeout": 600, "pollingInterval": 10}
-# arguments_cloud = 'y0_AgAAAAAICbaeAAnQoQAAAADhyumQnrDWPKq4RJaNvozS0MynI_nnHew'
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
