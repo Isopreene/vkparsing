@@ -7,6 +7,7 @@ from celery.schedules import crontab
 from celery.utils.log import get_task_logger
 import redis
 
+
 def make_celery(app):
     #Celery configuration
     app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
@@ -35,13 +36,11 @@ arguments_vk = keys.KeysFromFiles().get_vk() #данные для вк
 arguments_captcha = keys.KeysFromFiles().get_captcha() #данные для решения капчи
 arguments_cloud = keys.KeysFromFiles().get_cloud()
 
-
 app = Flask(__name__)
-app.config["JSON_SORT_KEYS"] = False
 app.debug = True
-
 logger = get_task_logger(__name__)
 celery = make_celery(app)
+app.json.sort_keys = False
 
 @celery.task(name = "periodic_task")
 def periodic_task():

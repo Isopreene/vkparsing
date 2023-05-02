@@ -142,20 +142,6 @@ class Post:
         """Сеттер для __is_repost"""
         self.__is_repost = obj
 
-    @staticmethod
-    def get_poll(poll):
-        """Обрабатывает опрос, находящийся во вложении. Возвращает словарь со всем содержимым опроса"""
-        poll_image = poll.get('photo')
-        poll_image_url = None
-        if poll_image:
-            poll_image_url = max(poll_image['images'], key=lambda x: x['width'] * x['height'])['url']
-        votes = []
-        poll_answers_texts = []
-        for answer in poll['answers']:
-            poll_answers_texts.append(answer['text'])
-            votes.append(answer['votes'])
-        poll_answers = [poll['question'], {answer: vote for answer, vote in zip(poll_answers_texts, votes)}]
-        return {'image': poll_image_url if poll_image else None, 'answers': poll_answers}
 
 class PostsHandler:
 
@@ -197,18 +183,19 @@ class PostsHandler:
         elif attachment_type == 'audio':
             audio = attachment['audio']
             post_obj.add_attachment('audio', audio['url'])
-        elif attachment_type == 'audio':
+        elif attachment_type == 'doc':
             doc = attachment['doc']
             post_obj.add_attachment('doc', doc['url'])
         elif attachment_type == 'poll':
             poll = attachment['poll']
-            post_obj.add_attachment('doc', post_obj.get_poll(poll))
+            post_obj.add_attachment('poll', f"vk.com/poll-{-int(poll.get('owner_id'))}_{poll.get('id')}")
         else:
             pass
 
     def make_posts(self):
         """Проходит по списку постов, полученному из парсера, и создаёт объекты класса Post, занося их в список PostHandler().__processed_post"""
         for post in self.data['items']:  # проходимся по dict и получаем list
+            #print(*post.items(), sep='\n')
             new_post = Post()
             new_post.hash = post['hash']
             new_post.date = datetime.fromtimestamp(post['date']).strftime('%Y-%m-%d %H:%M:%S')
@@ -283,6 +270,7 @@ class ToDatabase:
                             cursor.execute(query, (check_hash, text, date_, id_,
                                                    is_repost))  # внесли текст поста, id создателя, дату поста и метку репоста (является/не является)
                             counter = 0
+                            print(attachments)
                             for attachment_type, attachment_list in [i for i in attachments.items() if i[1]]:
                                 for attachment in attachment_list:
                                     counter += 1
