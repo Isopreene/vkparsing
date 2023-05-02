@@ -56,10 +56,10 @@ def get_groups_by_get_requests():
     date_start = request.args.get('date_start', None)
     date_finish = request.args.get('date_finish', None)
     if all_:
-        data = main.Runners.start_all(args_db=arguments_db, date_start=date_start, date_finish=date_finish) # список словарей
+        data = main.Runners().start_all(args_db=arguments_db, date_start=date_start, date_finish=date_finish) # список словарей
     elif groups:
         groups = groups.split(',')
-        data = main.Runners.start_group(*groups, args_db=arguments_db, args_vk=arguments_vk, date_start=date_start, date_finish=date_finish)
+        data = main.Runners().start_group(*groups, args_db=arguments_db, args_vk=arguments_vk, date_start=date_start, date_finish=date_finish)
     else:
         return render_template('start_page.html', host=request.host)
     return data
@@ -67,7 +67,7 @@ def get_groups_by_get_requests():
 @app.route('/all')
 def get_all_groups():
     """Выводит все посты из всех групп, записанных в базу данных"""
-    data = main.Runners.start_all(args_db=arguments_db)  # список словарей
+    data = main.Runners().start_all(args_db=arguments_db)  # список словарей
     return data
 
 
