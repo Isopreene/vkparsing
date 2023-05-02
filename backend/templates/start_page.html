@@ -56,6 +56,20 @@
             text-align: justify-all;
         }
 
+        .cloud {
+            width: 40%;
+            margin: 0 auto;
+            border: 1px solid;
+            border-radius: 15px;
+            padding: 15px 15px;
+            text-align: center;
+        }
+
+        #cloud_link {
+            font-weight: bold;
+            font-size: 130%;
+        }
+
     </style>
 </head>
 <body>
@@ -67,6 +81,8 @@
                 <li>date_start=(YYYY-MM-DD)</li>
                 <li>date_finish=(YYYY-MM-DD)</li>
     <br> Запрос {{host}}/all работает как {{host}}/?all=True</div>
+    <br>
+    <div class=cloud><p>Ссылка на облако, куда выгружены фотографии из всех доступных в базе данных групп:</p><a id="cloud_link" href="https://disk.yandex.ru/d/txuGN1h2DuWV-Q">скачать</a></div>
     <br>
     <div class="commands">
         <div class="command">
