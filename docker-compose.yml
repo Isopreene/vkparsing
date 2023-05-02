@@ -30,6 +30,8 @@ services:
     ports:
       - "6379:6379"
     entrypoint: redis-server --appendonly yes
+    networks:
+      - redis
 
   celery-worker:
     build: backend
@@ -44,8 +46,11 @@ services:
       - cloud
     volumes:
       - ./backend:/code
-    depends_on:
-      - db
+      - ./db:/run
+      - db-data:/var/lib/mysql
+    networks:
+      - backnet
+      - frontnet
       - redis
 
   celery-beat:
@@ -61,9 +66,13 @@ services:
       - cloud
     volumes:
       - ./backend:/code
-    depends_on:
-      - db
+      - ./db:/run
+      - db-data:/var/lib/mysql
+    networks:
+      - backnet
+      - frontnet
       - redis
+
   backend:
     build:
       context: backend
@@ -109,3 +118,4 @@ secrets:
 networks:
   backnet:
   frontnet:
+  redis:

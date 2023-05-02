@@ -9,8 +9,8 @@ import redis
 
 def make_celery(app):
     #Celery configuration
-    app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
-    app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
+    app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
+    app.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/0'
     app.config['CELERYBEAT_SCHEDULE'] = {
         'periodic_task-every-hour': {
             'task': 'periodic_task',
