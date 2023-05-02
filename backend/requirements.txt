@@ -7,3 +7,4 @@ twocaptcha
 yadisk
 mysql-connector
 celery
+redis

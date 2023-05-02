@@ -371,10 +371,9 @@ class Runners:
         yagent = photographer.login_to_cloud(access_token=token)
         photographer.make_files_folder(agent=yagent)
         for group in url_photos:
-            for groupname, post_urls in group:
+            for groupname, post_urls in group.items():
                 for url in post_urls:
                     photographer.upload_to_cloud(agent=yagent, groupname=groupname, photo_url=url)
-        return photographer.get_url_to_files(agent=yagent)
 
 
     @staticmethod

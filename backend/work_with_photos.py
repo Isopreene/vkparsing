@@ -15,9 +15,6 @@ class DownloadPhotos:
         if not agent.exists('files'):
             agent.mkdir('files')
 
-    @staticmethod
-    def get_url_to_files(agent):
-        return agent.get_public_url('/files')
 
     @staticmethod
     def upload_to_cloud(agent, groupname, photo_url):
