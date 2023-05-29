@@ -5,6 +5,9 @@ from twocaptcha import TwoCaptcha
 from functools import wraps
 import work_with_photos
 from itertools import chain
+from time import sleep
+
+
 class MeasureTime:
     def __init__(self, cls):
         self.cls = cls
@@ -26,6 +29,7 @@ class MeasureTime:
             return wrapped
         return attr
 
+
 class MainMethods:
     """Основные методы для работы в программе"""
 
@@ -43,10 +47,12 @@ class MainMethods:
     def vk_login(self, groupname, **kwargs):
         """логинится в vk, заходит в группу groupname и получает все посты в виде словаря"""
         try:
+            sleep(0.5)
             vk_session = vk_api.VkApi(**kwargs, captcha_handler=self.captcha_handler)
             vk = vk_session.get_api()
             id_ = re.search(r'((public)|(club))(\d+)', groupname)
             short_name = re.search(r'(\w+)', groupname)
+            sleep(0.5)
             if id_:
                 posts = vk.wall.get(owner_id=-int(id_.group(4)), count=100,
                                     filter='all')  # dict, получаем все посты, count * 25 = их количество
