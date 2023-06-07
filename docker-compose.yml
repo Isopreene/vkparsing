@@ -91,6 +91,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - "./backend:/code"
 
   proxy:
     build: proxy
