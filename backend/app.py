@@ -7,6 +7,27 @@ from celery.schedules import crontab
 from celery.utils.log import get_task_logger
 import redis
 
+#todo 
+"""
+
+!!! - Постарайся переписать app.py так, чтобы количество строк занимало не больше 1 экранаы 
+
+Если посмотреть на хоршие примеры работы flask и celery,
+то увидишь, что всегда их оборачивают в модуль.
+
+https://github.com/testdrivenio/flask-celery-project - 
+Погугли celery python flask github projects и найди для себя вариант.
+
+к примеру:
+from project import create_app, ext_celery, socketio
+
+app = create_app()
+
+в данном случае это улучшит читаемость кода и упростит его.
+и стараемся привоить код к принципу - single responsibility principle (принцип единственной ответственности)
+
+
+"""
 
 def make_celery(app):
     #Celery configuration
@@ -50,6 +71,12 @@ def periodic_task():
 
 @app.route('/', methods=['get'])
 def get_groups_by_get_requests():
+    
+    #todo 
+    """
+    Всю логику скрой в отдельный модуль. На данный момент в main.
+    Но его тоже надо будет разгрузить
+    """
     """Выводит все посты из указанных групп через гет-запросы"""
     groups = request.args.get('groups', None)
     all_ = request.args.get('all', None)

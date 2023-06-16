@@ -94,6 +94,8 @@ services:
         condition: service_healthy
     volumes:
       - "./backend:/code"
+    #todo - обрати внимание на смену COPY на volumes. И подумай какой вариант лучше
+    # в backend\Dockerfile 
 
   proxy:
     build: proxy
