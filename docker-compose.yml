@@ -13,13 +13,14 @@ services:
       start_period: 30s
     secrets:
       - db-password
-    volumes:
-      - db-data:/var/lib/mysql
+    # todo - убрано из-за конфликта моего докера
+    # volumes:
+    #   - db-data:/var/lib/mysql
     networks:
       - backnet
     environment:
-      - MYSQL_DATABASE=vk
-      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/db-password
+      MYSQL_DATABASE: vk
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db-password
     expose:
       - 3306
       - 33060

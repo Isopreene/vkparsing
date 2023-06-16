@@ -1,6 +1,33 @@
 from json import load
 from pymysql.constants import CLIENT
 
+#todo
+"""
+Раз ты уже решил собирать аргументы из файла.
+То бери их все.
+Причём с vk я так понимаю ты что-то подобное уже сделал
+
+Задача: Унифицировать всё к одному типу конфигов - json
+
+Пример как выглядит файл у vscode. Это json.
+{
+    "name": "My Server",
+    "host": "localhost",
+    "protocol": "sftp",
+    "port": 22,
+    "password" "1T4zDELcUYa6h7yb",
+    "username": "username",
+    "remotePath": "/",
+    "uploadOnSave": false,
+    "useTempFile": false,
+    "openSsh": false
+}
+_________________
+
+Далее исключи повторы.
+Создай метод один метод чтения файла с  аргументом пути
+
+"""
 
 class KeysFromFiles:
 
